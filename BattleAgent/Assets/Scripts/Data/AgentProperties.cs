@@ -7,5 +7,5 @@ public class AgentProperties : ScriptableObject
     public int maxHP;
     public int attack;
     public int defense;
-    public int speed;
+    public float speed;
 }
