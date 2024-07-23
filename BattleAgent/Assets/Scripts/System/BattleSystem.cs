@@ -12,10 +12,15 @@ public class BattleSystem : MonoBehaviour
 
     public BattleUIManager uiManager;
 
+    /*
+        Flow of the game
+        1. Set up the battle field by initiating enemies and players and cache them to the list
+        2. Calculate the turn order by sorting agents speed
+        3. Start the battle by running a courtine, which run sub-coroutines for each agent
+     */
     void Start()
     {
         uiManager = FindObjectOfType<BattleUIManager>();
-        UpdateUI();
         SetupBattlefield();
         CalculateTurnOrder();
         StartBattle();
@@ -81,12 +86,9 @@ public class BattleSystem : MonoBehaviour
         turnOrder.AddRange(enemies);
         turnOrder.Sort((x, y) => y.Properties.speed.CompareTo(x.Properties.speed));
     }
-    void UpdateUI()
-    {
-    }
-
     IEnumerator RoutineExecuteTurns()
     {
+        // Start each agent coroutine
         foreach (var agent in turnOrder)
         {
             StartCoroutine(RoutineDoAction(agent));
@@ -97,6 +99,7 @@ public class BattleSystem : MonoBehaviour
             yield return new WaitForSeconds(1.0f); // check battle end condition every second
         }
 
+        // Battle End here, stop all coroutine, display the winner
         StopAllCoroutines();
 
         string winner = players.Exists(p => p.IsAlive()) ? "Players" : "Enemies";
@@ -116,7 +119,6 @@ public class BattleSystem : MonoBehaviour
                 action.Execute(agent, target);
                 string logMessage = $"{agent.name} used {action.GetType().Name} on {target.name}";
                 uiManager.LogAction(logMessage);
-                UpdateUI();
             }
 
             yield return new WaitForSeconds(1.0f / agent.Properties.speed); // Simulate action execution time based on speed
@@ -128,8 +130,12 @@ public class BattleSystem : MonoBehaviour
         StartCoroutine(RoutineExecuteTurns());
     }
 
+    /*
+        return an available target for this action trigger by the owner
+     */
     public Agent GetTarget(Agent owner, Action action)
     {
+        // Should we use an enum to handle the Type instead of asking like this?
         if (action is DamageAction || action is DebuffAction || action is DamageOverTimeAction)
         {
             // Target an enemy, maybe random? Let's focus on the first on alive for now

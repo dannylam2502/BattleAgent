@@ -29,9 +29,6 @@ public class Agent : MonoBehaviour
         {
             animatorController = GetComponent<Animator>();
         }
-
-        // Instantiate the health bar and set it up
-
     }
 
     void Update()
@@ -78,6 +75,7 @@ public class Agent : MonoBehaviour
         onDead += del;
     }
 
+    // Called when HP == 0
     protected void OnDead()
     {
         onDead?.Invoke(this);
@@ -93,6 +91,7 @@ public class Agent : MonoBehaviour
         return currentHP > 0;
     }
 
+    // Get Random action for now
     public Action GetAction()
     {
         if (availableActions.Length == 0)
@@ -102,6 +101,7 @@ public class Agent : MonoBehaviour
         return availableActions[randomIndex];
     }
 
+    // Apply buff by running a coroutine with the duration, add buff to the healthbar
     public void ApplyBuff(StatType statType, float value, float duration, bool isDebuff = false)
     {
         if (healthBarInstance)
@@ -111,6 +111,7 @@ public class Agent : MonoBehaviour
         StartCoroutine(BuffCoroutine(statType, value, duration));
     }
 
+    // Handle Buff Routine, apply stat change then revert the value after duration
     private IEnumerator BuffCoroutine(StatType statType, float value, float duration)
     {
         ApplyStatChange(statType, value);
