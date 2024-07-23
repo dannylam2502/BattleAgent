@@ -78,8 +78,12 @@ public class Agent : MonoBehaviour
         return availableActions[randomIndex];
     }
 
-    public void ApplyBuff(StatType statType, float value, float duration)
+    public void ApplyBuff(StatType statType, float value, float duration, bool isDebuff = false)
     {
+        if (healthBarInstance)
+        {
+            healthBarInstance.AddBuff(statType, duration, isDebuff);
+        }
         StartCoroutine(BuffCoroutine(statType, value, duration));
     }
 

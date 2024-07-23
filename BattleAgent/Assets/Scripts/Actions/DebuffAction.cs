@@ -7,6 +7,7 @@ public class DebuffAction : BuffAction
 {
     public override void Execute(Agent user, Agent target)
     {
-        base.Execute(user, target);
+        target.ApplyBuff(statType, buffValue, duration, true);
+        user.PlayAnimation();
     }
 }
