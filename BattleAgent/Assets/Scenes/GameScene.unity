@@ -260,10 +260,12 @@ MonoBehaviour:
   m_GameObject: {fileID: 929271862}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ba4c7f7179ec4664283c8b2cf5ed6340, type: 3}
+  m_Script: {fileID: 11500000, guid: f6849c1d4e9cd2641a78660b8cd5c215, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
   battleConfiguration: {fileID: 11400000, guid: abe23226ffb0f1440b29ddc8859194f3, type: 2}
+  players: []
+  enemies: []
 --- !u!1 &1436936344
 GameObject:
   m_ObjectHideFlags: 0

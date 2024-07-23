@@ -119,6 +119,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 13c75a8990696f648be6cd1390262b0c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  properties: {fileID: 11400000, guid: 32a0c8034b2197d4abcf5352a4f441b4, type: 2}
+  defaultProperties: {fileID: 11400000, guid: 32a0c8034b2197d4abcf5352a4f441b4, type: 2}
   currentHP: 0
-  availableActions: []
+  availableActions:
+  - {fileID: 11400000, guid: ad7b48fbb16b13e40b531e8fb3c9819e, type: 2}
+  - {fileID: 11400000, guid: d0d02aa2f28919a4994d3b2b786fdbcb, type: 2}
+  - {fileID: 11400000, guid: fb0d90f6377314846981b3d87ad6a787, type: 2}
+  - {fileID: 11400000, guid: 69beb04c1f339ba40aab75373901ad47, type: 2}
+  animatorController: {fileID: 0}

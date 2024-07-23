@@ -10,6 +10,7 @@ public class BuffAction : Action
     public override void Execute(Agent user, Agent target)
     {
         target.ApplyBuff(statType, buffValue, duration);
+        user.PlayAnimation();
     }
 }
 

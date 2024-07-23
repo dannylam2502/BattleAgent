@@ -62,7 +62,6 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Actions\Action.cs" />
     <Compile Include="Assets\Scripts\Agents\Player.cs" />
-    <Compile Include="Assets\Scripts\System\BattleSetup.cs" />
     <Compile Include="Assets\Scripts\System\BattleSystem.cs" />
     <Compile Include="Assets\Scripts\Actions\HealAction.cs" />
     <Compile Include="Assets\Scripts\Data\AgentProperties.cs" />

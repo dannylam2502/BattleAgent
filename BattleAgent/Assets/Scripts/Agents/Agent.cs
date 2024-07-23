@@ -1,15 +1,26 @@
 using System.Collections;
+using UnityEditor.Animations;
 using UnityEngine;
 
 public class Agent : MonoBehaviour
 {
-    public AgentProperties properties;
+    public AgentProperties defaultProperties;
     public int currentHP;
     public Action[] availableActions;
+    public Animator animatorController;
+
+    public const string TRIGGER_ACTION = "Action";
+    protected AgentProperties properties;
+    public AgentProperties Properties { get { return properties; } }
 
     void Awake()
     {
+        properties = ScriptableObject.Instantiate(defaultProperties);
         currentHP = properties.maxHP;
+        if (animatorController == null)
+        {
+            animatorController = GetComponent<Animator>();
+        }
     }
 
     public void TakeDamage(int damage)
@@ -38,21 +49,6 @@ public class Agent : MonoBehaviour
         return availableActions[randomIndex];
     }
 
-    public Agent GetTarget(Action action)
-    {
-        if (action is DamageAction || action is DebuffAction)
-        {
-            // Target an enemy
-            return FindObjectOfType<BattleSystem>().enemies.Find(e => e.IsAlive());
-        }
-        else if (action is HealAction || action is BuffAction)
-        {
-            // Target a player
-            return FindObjectOfType<BattleSystem>().players.Find(p => p.IsAlive());
-        }
-        return null;
-    }
-
     public void ApplyBuff(StatType statType, int value, float duration)
     {
         StartCoroutine(BuffCoroutine(statType, value, duration));
@@ -78,6 +74,15 @@ public class Agent : MonoBehaviour
             case StatType.Speed:
                 properties.speed += value;
                 break;
+        }
+    }
+
+    // We only have action right now I believe, let's leave others as extensible features
+    public void PlayAnimation(string action = TRIGGER_ACTION)
+    {
+        if (animatorController)
+        {
+            animatorController.SetTrigger(action);
         }
     }
 }

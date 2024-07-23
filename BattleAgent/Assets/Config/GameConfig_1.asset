@@ -12,9 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f5dc2b9cef6f0b6459c25f06958bcd7a, type: 3}
   m_Name: GameConfig_1
   m_EditorClassIdentifier: 
-  numPlayerRows: 3
+  numPlayerRows: 1
   numPlayerColumns: 3
-  numEnemyRows: 3
+  numEnemyRows: 1
   numEnemyColumns: 3
   playerPrefab: {fileID: 3954035147118105280, guid: a84b390f8fe415d41bac084febe83c39, type: 3}
   enemyPrefab: {fileID: 509152333070101925, guid: b989d4b18f4bcd349a86efdf2bc15320, type: 3}

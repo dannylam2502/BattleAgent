@@ -7,6 +7,7 @@ public class HealAction : Action
 
     public override void Execute(Agent user, Agent target)
     {
-        target.Heal(healValue + user.properties.attack);
+        target.Heal(healValue + user.Properties.attack);
+        user.PlayAnimation();
     }
 }
