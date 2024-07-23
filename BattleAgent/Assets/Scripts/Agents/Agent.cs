@@ -11,12 +11,16 @@ public class Agent : MonoBehaviour
     public HealthBar healthBarPrefab; // Reference to the HealthBar prefab
     private HealthBar healthBarInstance;
 
-    public const string TRIGGER_ACTION = "Action";
     protected AgentProperties properties;
     public AgentProperties Properties { get { return properties; } }
 
     protected float lastHealth; // track the last frames health
 
+    public delegate void OnDeadDelegate(Agent agent);
+    public OnDeadDelegate onDead;
+
+    public const string TRIGGER_ACTION = "Action";
+    public const string TRIGGER_HIT = "Hit";
     void Awake()
     {
         properties = ScriptableObject.Instantiate(defaultProperties);
@@ -56,12 +60,32 @@ public class Agent : MonoBehaviour
     {
         currentHP -= Mathf.Max(damage - properties.defense, 0);
         currentHP = Mathf.Max(currentHP, 0);
+        PlayAnimation(TRIGGER_HIT);
+        if (currentHP == 0)
+        {
+            OnDead();
+        }
     }
 
     public void Heal(float healAmount)
     {
         currentHP += healAmount;
         currentHP = Mathf.Min(currentHP, properties.maxHP);
+    }
+
+    public void AddOnDeadDelegate(OnDeadDelegate del)
+    {
+        onDead += del;
+    }
+
+    protected void OnDead()
+    {
+        onDead?.Invoke(this);
+        gameObject.SetActive(false);
+        if (healthBarInstance != null)
+        {
+            Destroy(healthBarInstance.gameObject);
+        }
     }
 
     public bool IsAlive()
