@@ -5,13 +5,17 @@ using UnityEngine;
 public class Agent : MonoBehaviour
 {
     public AgentProperties defaultProperties;
-    public int currentHP;
+    public float currentHP;
     public Action[] availableActions;
     public Animator animatorController;
+    public HealthBar healthBarPrefab; // Reference to the HealthBar prefab
+    private HealthBar healthBarInstance;
 
     public const string TRIGGER_ACTION = "Action";
     protected AgentProperties properties;
     public AgentProperties Properties { get { return properties; } }
+
+    protected float lastHealth; // track the last frames health
 
     void Awake()
     {
@@ -21,15 +25,40 @@ public class Agent : MonoBehaviour
         {
             animatorController = GetComponent<Animator>();
         }
+
+        // Instantiate the health bar and set it up
+
     }
 
-    public void TakeDamage(int damage)
+    void Update()
+    {
+        if (lastHealth != currentHP)
+        {
+            // On health changed
+            if (healthBarInstance != null)
+            {
+                healthBarInstance.SetHealth(currentHP);
+            }
+        }
+        lastHealth = currentHP;
+    }
+
+    public void SetupHealthBar()
+    {
+        healthBarInstance = Instantiate(healthBarPrefab, FindObjectOfType<Canvas>().transform);
+        healthBarInstance.SetMaxHealth(Properties.maxHP);
+        healthBarInstance.gameObject.name = "HealthBar";
+        Vector3 screenPos = Camera.main.WorldToScreenPoint(transform.position);
+        healthBarInstance.transform.position = screenPos + new Vector3(0, 30, 0); // Offset above the agent
+    }
+
+    public void TakeDamage(float damage)
     {
         currentHP -= Mathf.Max(damage - properties.defense, 0);
         currentHP = Mathf.Max(currentHP, 0);
     }
 
-    public void Heal(int healAmount)
+    public void Heal(float healAmount)
     {
         currentHP += healAmount;
         currentHP = Mathf.Min(currentHP, properties.maxHP);
@@ -49,19 +78,19 @@ public class Agent : MonoBehaviour
         return availableActions[randomIndex];
     }
 
-    public void ApplyBuff(StatType statType, int value, float duration)
+    public void ApplyBuff(StatType statType, float value, float duration)
     {
         StartCoroutine(BuffCoroutine(statType, value, duration));
     }
 
-    private IEnumerator BuffCoroutine(StatType statType, int value, float duration)
+    private IEnumerator BuffCoroutine(StatType statType, float value, float duration)
     {
         ApplyStatChange(statType, value);
         yield return new WaitForSeconds(duration);
         ApplyStatChange(statType, -value);
     }
 
-    private void ApplyStatChange(StatType statType, int value)
+    private void ApplyStatChange(StatType statType, float value)
     {
         switch (statType)
         {

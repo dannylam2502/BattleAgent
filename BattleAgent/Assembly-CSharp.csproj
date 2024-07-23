@@ -67,6 +67,7 @@
     <Compile Include="Assets\Scripts\Actions\HealOverTimeAction.cs" />
     <Compile Include="Assets\Scripts\Actions\HealAction.cs" />
     <Compile Include="Assets\Scripts\Data\AgentProperties.cs" />
+    <Compile Include="Assets\Scripts\UI\HealthBar.cs" />
     <Compile Include="Assets\Scripts\Agents\Enemy.cs" />
     <Compile Include="Assets\Scripts\Actions\DebuffAction.cs" />
     <Compile Include="Assets\Scripts\Data\BattleConfiguration.cs" />

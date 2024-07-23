@@ -3,7 +3,7 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "BuffAction", menuName = "ScriptableObjects/Actions/BuffAction", order = 1)]
 public class BuffAction : Action
 {
-    public int buffValue;
+    public float buffValue;
     public float duration;
     public StatType statType; // Enum for which stat to buff (attack, defense, speed)
 

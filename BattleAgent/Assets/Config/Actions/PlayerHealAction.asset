@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 178e199f58bf7fa408388a244670f75c, type: 3}
   m_Name: PlayerHealAction
   m_EditorClassIdentifier: 
-  healValue: 50
+  healValue: 5

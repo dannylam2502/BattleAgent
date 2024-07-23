@@ -4,8 +4,8 @@ using UnityEngine;
 public class AgentProperties : ScriptableObject
 {
     public string agentName;
-    public int maxHP;
-    public int attack;
-    public int defense;
+    public float maxHP;
+    public float attack;
+    public float defense;
     public float speed;
 }

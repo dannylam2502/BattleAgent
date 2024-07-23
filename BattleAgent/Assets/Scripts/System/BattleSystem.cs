@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 public class BattleSystem : MonoBehaviour
@@ -49,6 +50,8 @@ public class BattleSystem : MonoBehaviour
                 if (comp != null)
                 {
                     players.Add(comp);
+                    comp.SetupHealthBar();
+                    gameObj.name = "Player" + (col * row + row);
                 }
             }
         }
@@ -65,6 +68,8 @@ public class BattleSystem : MonoBehaviour
                 if (comp != null)
                 {
                     enemies.Add(comp);
+                    comp.SetupHealthBar();
+                    gameObj.name = "Enemy" + (col * row + row);
                 }
             }
         }
@@ -80,51 +85,74 @@ public class BattleSystem : MonoBehaviour
     {
     }
 
-    IEnumerator ExecuteTurns()
+    IEnumerator RoutineExecuteTurns()
     {
+        foreach (var agent in turnOrder)
+        {
+            StartCoroutine(RoutineDoAction(agent));
+        }
+
         while (players.Exists(p => p.IsAlive()) && enemies.Exists(e => e.IsAlive()))
         {
-            foreach (var agent in turnOrder)
-            {
-                if (agent.IsAlive())
-                {
-                    // Get a random action, maybe we need to build a system to have a weight or any conditions needed
-                    Action action = agent.GetAction();
-                    Agent target = GetTarget(action);
-                    if (target != null)
-                    {
-                        action.Execute(agent, target);
-                        string logMessage = $"{agent.name} used {action.GetType().Name} on {target.name}";
-                        uiManager.LogAction(logMessage);
-                        UpdateUI();
-                    }
-
-                    yield return new WaitForSeconds(1.0f / agent.Properties.speed); // Simulate action execution time based on speed
-                }
-            }
+            yield return new WaitForSeconds(1.0f); // check battle end condition every second
         }
+
+        StopAllCoroutines();
 
         string winner = players.Exists(p => p.IsAlive()) ? "Players" : "Enemies";
         uiManager.DisplayWinner(winner);
         Debug.Log("Battle Ended");
     }
 
-    public void StartBattle()
+    IEnumerator RoutineDoAction(Agent agent)
     {
-        StartCoroutine(ExecuteTurns());
+        while (agent.IsAlive())
+        {
+            // Get a random action, maybe we need to build a system to have a weight or any conditions needed
+            Action action = agent.GetAction();
+            Agent target = GetTarget(agent, action);
+            if (target != null)
+            {
+                action.Execute(agent, target);
+                string logMessage = $"{agent.name} used {action.GetType().Name} on {target.name}";
+                uiManager.LogAction(logMessage);
+                UpdateUI();
+            }
+
+            yield return new WaitForSeconds(1.0f / agent.Properties.speed); // Simulate action execution time based on speed
+        }
     }
 
-    public Agent GetTarget(Action action)
+    public void StartBattle()
     {
-        if (action is DamageAction || action is DebuffAction)
+        StartCoroutine(RoutineExecuteTurns());
+    }
+
+    public Agent GetTarget(Agent owner, Action action)
+    {
+        if (action is DamageAction || action is DebuffAction || action is DamageOverTimeAction)
         {
-            // Target an enemy, maybe random?
-            return enemies.Find(e => e.IsAlive());
+            // Target an enemy, maybe random? Let's focus on the first on alive for now
+            if (owner is Player)
+            {
+                return enemies.Find(e => e.IsAlive());
+            }
+            else
+            {
+                return players.Find(p => p.IsAlive());
+            }
         }
-        else if (action is HealAction || action is BuffAction)
+        else if (action is HealAction || action is BuffAction || action is HealOverTimeAction)
         {
-            // Target a player, maybe random?
-            return players.Find(p => p.IsAlive());
+            // Target an enemy, maybe random? Let's focus on the first on alive for now
+            if (owner is Enemy)
+            {
+                return enemies.Find(e => e.IsAlive());
+            }
+            else
+            {
+                return players.Find(p => p.IsAlive());
+            }
         }
         return null;
     }

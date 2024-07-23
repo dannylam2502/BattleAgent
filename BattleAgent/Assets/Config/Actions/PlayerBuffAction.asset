@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 311f7c7272fe7e245b4f3e1b2b7f1296, type: 3}
   m_Name: PlayerBuffAction
   m_EditorClassIdentifier: 
-  buffValue: 10
-  duration: 10
-  statType: 0
+  buffValue: -0.1
+  duration: 3
+  statType: 2

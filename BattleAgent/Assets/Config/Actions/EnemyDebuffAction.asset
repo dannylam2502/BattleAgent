@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 849564f73243ee043b4313ff677d92ed, type: 3}
   m_Name: EnemyDebuffAction
   m_EditorClassIdentifier: 
-  buffValue: -10
+  buffValue: -3
   duration: 8
   statType: 1

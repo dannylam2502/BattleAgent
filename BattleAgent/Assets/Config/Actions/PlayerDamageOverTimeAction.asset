@@ -12,6 +12,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4569d7c671266b34cb88bb38da95ad47, type: 3}
   m_Name: PlayerDamageOverTimeAction
   m_EditorClassIdentifier: 
-  damagePerTick: 10
+  damagePerTick: 4
   tickInterval: 1
   duration: 5

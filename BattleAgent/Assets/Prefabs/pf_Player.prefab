@@ -129,3 +129,4 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 0d5f0d384560a3d449aeb35699e3eb2b, type: 2}
   - {fileID: 11400000, guid: daefa11453bf8bc4e8cdafd9d7231665, type: 2}
   animatorController: {fileID: 0}
+  healthBarPrefab: {fileID: 328362610095889678, guid: 927071ac16e3b3f43b80128458418e0a, type: 3}

@@ -7,7 +7,7 @@ public class DamageAction : Action
 
     public override void Execute(Agent user, Agent target)
     {
-        int damage = Mathf.Max(damageValue + user.Properties.attack - target.Properties.defense, 0);
+        float damage = Mathf.Max(damageValue + user.Properties.attack - target.Properties.defense, 0.0f);
         target.TakeDamage(damage);
         user.PlayAnimation();
     }
