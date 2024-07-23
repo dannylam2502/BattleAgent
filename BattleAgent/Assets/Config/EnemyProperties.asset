@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: EnemyProperties
   m_EditorClassIdentifier: 
   agentName: 
-  maxHP: 500
+  maxHP: 100
   attack: 20
   defense: 10
   speed: 1.5

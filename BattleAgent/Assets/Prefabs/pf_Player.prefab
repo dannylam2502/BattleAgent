@@ -126,4 +126,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: d0d02aa2f28919a4994d3b2b786fdbcb, type: 2}
   - {fileID: 11400000, guid: fb0d90f6377314846981b3d87ad6a787, type: 2}
   - {fileID: 11400000, guid: 69beb04c1f339ba40aab75373901ad47, type: 2}
+  - {fileID: 11400000, guid: 0d5f0d384560a3d449aeb35699e3eb2b, type: 2}
+  - {fileID: 11400000, guid: daefa11453bf8bc4e8cdafd9d7231665, type: 2}
   animatorController: {fileID: 0}

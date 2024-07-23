@@ -9,8 +9,12 @@ public class BattleSystem : MonoBehaviour
     public List<Agent> enemies;
     private List<Agent> turnOrder;
 
+    public BattleUIManager uiManager;
+
     void Start()
     {
+        uiManager = FindObjectOfType<BattleUIManager>();
+        UpdateUI();
         SetupBattlefield();
         CalculateTurnOrder();
         StartBattle();
@@ -72,6 +76,9 @@ public class BattleSystem : MonoBehaviour
         turnOrder.AddRange(enemies);
         turnOrder.Sort((x, y) => y.Properties.speed.CompareTo(x.Properties.speed));
     }
+    void UpdateUI()
+    {
+    }
 
     IEnumerator ExecuteTurns()
     {
@@ -87,6 +94,9 @@ public class BattleSystem : MonoBehaviour
                     if (target != null)
                     {
                         action.Execute(agent, target);
+                        string logMessage = $"{agent.name} used {action.GetType().Name} on {target.name}";
+                        uiManager.LogAction(logMessage);
+                        UpdateUI();
                     }
 
                     yield return new WaitForSeconds(1.0f / agent.Properties.speed); // Simulate action execution time based on speed
@@ -94,6 +104,8 @@ public class BattleSystem : MonoBehaviour
             }
         }
 
+        string winner = players.Exists(p => p.IsAlive()) ? "Players" : "Enemies";
+        uiManager.DisplayWinner(winner);
         Debug.Log("Battle Ended");
     }
 
@@ -106,12 +118,12 @@ public class BattleSystem : MonoBehaviour
     {
         if (action is DamageAction || action is DebuffAction)
         {
-            // Target an enemy
+            // Target an enemy, maybe random?
             return enemies.Find(e => e.IsAlive());
         }
         else if (action is HealAction || action is BuffAction)
         {
-            // Target a player
+            // Target a player, maybe random?
             return players.Find(p => p.IsAlive());
         }
         return null;
