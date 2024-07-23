@@ -51,6 +51,7 @@ public class BattleSystem : MonoBehaviour
                 float xPos = -halfScreenWidth + playerHorizontalSpacing * (col + 1);
                 float yPos = screenHeight / 2 - playerVerticalSpacing * (row + 1);
                 GameObject gameObj = Instantiate(battleConfiguration.playerPrefab, new Vector3(xPos, yPos, 0), Quaternion.identity);
+                gameObj.transform.parent = this.gameObject.transform; // group them to BattleField for better looking hierarchy
                 var comp = gameObj.GetComponent<Agent>();
                 if (comp != null)
                 {
@@ -69,6 +70,7 @@ public class BattleSystem : MonoBehaviour
                 float xPos = halfScreenWidth - enemyZoneWidth + enemyHorizontalSpacing * (col + 1);
                 float yPos = screenHeight / 2 - enemyVerticalSpacing * (row + 1);
                 GameObject gameObj = Instantiate(battleConfiguration.enemyPrefab, new Vector3(xPos, yPos, 0), Quaternion.identity);
+                gameObj.transform.parent = this.gameObject.transform; // group them to BattleField for better looking hierarchy
                 var comp = gameObj.GetComponent<Agent>();
                 if (comp != null)
                 {
