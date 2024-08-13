@@ -1,0 +1,18 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1045 &1
+EditorBuildSettings:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Scenes:
+  - enabled: 0
+    path: Assets/Scenes/TestDownload.unity
+    guid: 3fc8acdd13e6c734bafef6554d6fdbcd
+  - enabled: 0
+    path: Assets/Scenes/FastDownloadAndDecode.unity
+    guid: 5f7cc985c3cf91643b2542ecff39afb5
+  - enabled: 1
+    path: Assets/Scenes/TestUniTaskDownload.unity
+    guid: 051078a66975f5540bb53ef3c04613be
+  m_configObjects:
+    com.unity.adaptiveperformance.simulator.provider_settings: {fileID: 11400000, guid: 2b538ce33a04402448134d31c9f9b60d, type: 2}
