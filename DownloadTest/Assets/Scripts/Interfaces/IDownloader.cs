@@ -1,6 +1,6 @@
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 
 public interface IDownloader
 {
-    Task<byte[]> DownloadData(string url);
+    UniTask<byte[]> DownloadData(string url);
 }

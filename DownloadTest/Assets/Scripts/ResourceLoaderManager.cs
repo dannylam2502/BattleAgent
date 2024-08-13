@@ -3,11 +3,11 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Net.Http;
+using Cysharp.Threading.Tasks;
 using System.Threading;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Collections;
-using Unity.VisualScripting;
 
 public class ResourceLoaderManager : MonoBehaviour
 {
@@ -33,8 +33,7 @@ public class ResourceLoaderManager : MonoBehaviour
     private ConcurrentDictionary<string, Action<object>> pendingCallbacks = new ConcurrentDictionary<string, Action<object>>();
     private PriorityQueue<ResourceRequest> requestQueue = new PriorityQueue<ResourceRequest>();
 
-    private int maxThreads;
-    private int currentThreads = 0;
+    public int maxThreads;
     private float downloadSpeed = 0f;
     private const int MAX_RETRIES = 3;
 
@@ -44,11 +43,13 @@ public class ResourceLoaderManager : MonoBehaviour
     private void Awake()
     {
         maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 16);  // Cap at 16 threads
-        StartCoroutine(ProcessQueue());
+        downloader = new HttpClientDownloader();
     }
+
     private void OnDestroy()
     {
     }
+
     public void GetResource<T>(string url, Action<object> callback, int priority = 0, object user = null) where T : UnityEngine.Object
     {
         if (resourceCache.TryGetValue(url, out object cachedResource))
@@ -69,67 +70,87 @@ public class ResourceLoaderManager : MonoBehaviour
 
         requestQueue.Enqueue(new ResourceRequest(url, typeof(T), priority));
     }
-    private IEnumerator ProcessQueue()
+
+    public async UniTaskVoid ProcessQueue()
     {
-        while (true)
+        SemaphoreSlim semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
+
+        List<UniTask> downloadTasks = new List<UniTask>();
+
+        while (!requestQueue.IsEmpty)
         {
-            UpdateThreadCount();
+            ResourceRequest request = requestQueue.Dequeue();
 
-            List<Task> downloadTasks = new List<Task>();
+            // Start the download immediately and add the task to the list
+            UniTask downloadTask = DownloadResource(request, semaphore);
+            downloadTasks.Add(downloadTask);
+        }
 
-            while (currentThreads < maxThreads && !requestQueue.IsEmpty)
+        if (downloadTasks.Count > 0)
+        {
+            await UniTask.WhenAll(downloadTasks); // Wait for the current batch to complete
+            downloadTasks.Clear(); // Clear the list for the next batch
+        }
+
+        InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
+    }
+
+
+
+    public void InvokeAllCallbacks(List<string> callbackIds)
+    {
+        foreach (var id in callbackIds)
+        {
+            if (resourceCache.ContainsKey(id))
             {
-                ResourceRequest request = requestQueue.Dequeue();
-                currentThreads++;
-                downloadTasks.Add(DownloadResource(request));
-            }
-
-            if (downloadSpeed > 2f && downloadTasks.Count > 0)
-            {
-                // For fast speeds, wait for all downloads to complete before processing
-                yield return new WaitUntil(() => Task.WhenAll(downloadTasks).IsCompleted);
-                foreach (var task in downloadTasks)
+                long size = 0;
+                size = ((byte[])resourceCache[id]).LongLength;
+                if (pendingCallbacks.ContainsKey(id))
                 {
-                    ProcessDownloadedResource(task as Task<(string, object)>);
+                    var callback = pendingCallbacks[id];
+                    callback?.Invoke($"{id} size = {size}");
+                }
+            }
+        }
+        foreach (var id in callbackIds)
+        {
+            pendingCallbacks.Remove(id, out Action<object> obj);
+        }
+    }
+
+    private async UniTask DownloadResource(ResourceRequest request, SemaphoreSlim semaphore)
+    {
+        await semaphore.WaitAsync(); // Wait for a slot to become available
+
+        try
+        {
+            for (int retry = 0; retry < MAX_RETRIES; retry++)
+            {
+                try
+                {
+                    var result = await downloader.DownloadData(request.Url);
+                    if (result != null)
+                    {
+                        resourceCache[request.Url] = result;
+                    }
+                    return;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"Download failed (Attempt {retry + 1}/{MAX_RETRIES}): {e.Message}");
+                    await UniTask.Delay(Mathf.FloorToInt(1000 * Mathf.Pow(2, retry)));
                 }
             }
 
-            yield return new WaitForSeconds(0.1f);
+            Debug.LogError($"Failed to download resource after {MAX_RETRIES} attempts: {request.Url}");
         }
-    }
-    private async Task DownloadResource(ResourceRequest request)
-    {
-        for (int retry = 0; retry < MAX_RETRIES; retry++)
+        finally
         {
-            try
-            {
-                var result = await DownloadAndProcessResource(request.Url, request.Type);
-                return;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"Download failed (Attempt {retry + 1}/{MAX_RETRIES}): {e.Message}");
-                await Task.Delay(Mathf.FloorToInt(1000 * Mathf.Pow(2, retry)));
-            }
+            semaphore.Release(); // Release the semaphore slot for the next task
         }
-
-        Debug.LogError($"Failed to download resource after {MAX_RETRIES} attempts: {request.Url}");
-        InvokeCallbacks(request.Url, null);
-        currentThreads--;
     }
 
-    private void ProcessDownloadedResource(Task<(string, object)> task)
-    {
-        if (task.IsCompletedSuccessfully)
-        {
-            var (url, resource) = task.Result;
-            resourceCache[url] = resource;
-            InvokeCallbacks(url, resource);
-        }
-        currentThreads--;
-    }
-
-    private async Task<(string, object)> DownloadAndProcessResource(string url, Type type)
+    private async UniTask<(string, object)> DownloadAndProcessResource(string url, Type type)
     {
         ////var startTime = Time.realtimeSinceStartup;
         //var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
@@ -166,7 +187,7 @@ public class ResourceLoaderManager : MonoBehaviour
         }
     }
 
-    private void InvokeCallbacks(string url, object resource)
+    private void InvokeCallback(string url, object resource)
     {
         if (pendingCallbacks.TryRemove(url, out Action<object> callback))
         {

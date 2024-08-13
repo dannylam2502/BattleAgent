@@ -9,7 +9,7 @@ using UnityEngine;
 public class TestDownload : MonoBehaviour
 {
     public string filePath = "AssetLog"; // Path within Resources (exclude the .txt extension)
-    private static readonly HttpClient httpClient = new HttpClient();
+    private static readonly HttpClientDownloader httpClient = new HttpClientDownloader();
     private SemaphoreSlim semaphore;
     public UIScript uiScript;
     public int totalSize = 0;
@@ -122,10 +122,10 @@ public class TestDownload : MonoBehaviour
             {
                 try
                 {
-                    HttpResponseMessage response = await httpClient.GetAsync(url);
-                    if (response.IsSuccessStatusCode)
+                    byte[] data = await httpClient.DownloadData(url);
+                    if (data.Length > 0)
                     {
-                        byte[] data = await response.Content.ReadAsByteArrayAsync();
+                        //byte[] data = await response.Content.ReadAsByteArrayAsync();
                         // Save the file locally for mobile
                         //string savePath = Path.Combine(Application.persistentDataPath, fileName);
                         //File.WriteAllBytes(savePath, data);
@@ -138,8 +138,6 @@ public class TestDownload : MonoBehaviour
                     }
                     else
                     {
-                        Debug.LogError($"Error downloading {fileName}: {response.ReasonPhrase}");
-                        currentLog += $"Error downloading {fileName}: {response.ReasonPhrase}\n";
                         UpdateLog();
                     }
                 }
