@@ -10,7 +10,7 @@ using UnityEngine;
 public class TestUniTaskDownload : MonoBehaviour
 {
     public string filePath = "AssetLog"; // Path within Resources (exclude the .txt extension)
-    private static readonly HttpClient httpClient = new HttpClient();
+    private static HttpClient httpClient = new HttpClient();
     private SemaphoreSlim semaphore;
     public UIScript uiScript;
     public int totalSize = 0;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public class TestResourceManager : MonoBehaviour
 {
@@ -17,13 +18,17 @@ public class TestResourceManager : MonoBehaviour
     int totalDownloads = 0;
     System.Diagnostics.Stopwatch timer = new System.Diagnostics.Stopwatch();
 
-    public void OnClickButtonTestDownload()
+    public async void OnClickButtonTestDownload()
     {
         timer.Reset();
-        timer.Start();
         totalSize = 0;
         currentLog = string.Empty;
-        DownloadFilesAsync(); // Start the UniTask and forget to avoid warnings
+        ResourceLoaderManager.Instance.ReleaseAllResources();
+        ResourceLoaderManager.Instance.semaphore.Dispose();
+        ResourceLoaderManager.Instance.semaphore = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumConcurrent.text));
+        currentLog = "Downloading";
+        UpdateLog();
+        await DownloadFilesAsync(); // Start the UniTask and forget to avoid warnings
     }
 
     void UpdateLog()
@@ -31,7 +36,7 @@ public class TestResourceManager : MonoBehaviour
         uiScript.log.text = currentLog;
     }
 
-    void DownloadFilesAsync()
+    async UniTask DownloadFilesAsync()
     {
         string[] urls = ReadFileLines(); // Use synchronous file reading from Resources
 
@@ -45,13 +50,13 @@ public class TestResourceManager : MonoBehaviour
 
         totalDownloads = urls.Length;
         numDownloaded = 0;
-
         foreach (string url in urls)
         {
             // Call the ResourceLoaderManager to get resources asynchronously
             ResourceLoaderManager.Instance.GetResource<Texture2D>(url, OnDownloadComplete);
         }
-        ResourceLoaderManager.Instance.ProcessQueue().Forget();
+        timer.Restart();
+        await ResourceLoaderManager.Instance.ProcessQueue();
     }
 
     string[] ReadFileLines()
@@ -72,12 +77,22 @@ public class TestResourceManager : MonoBehaviour
         if (timer.IsRunning)
         {
             timer.Stop();
-            Debug.LogError($"Done Downloaded in {timer.ElapsedMilliseconds} ms");
-            currentLog = $"MaxThread = {ResourceLoaderManager.Instance.maxThreads} Downloaded in {timer.ElapsedMilliseconds} ms";
+            var time = ResourceLoaderManager.Instance.stopwatch.ElapsedMilliseconds;
+            currentLog = $"MaxThread = {ResourceLoaderManager.Instance.semaphore.CurrentCount} Downloaded in {timer.ElapsedMilliseconds} ms";
+            float totalTimeSync = 0.0f, totalTimeLoad = 0.0f;
+            var dictTimeSync = ResourceLoaderManager.Instance.dictURLToTimeWaitAsync;
+            var dictTimeLoad = ResourceLoaderManager.Instance.dictURLToTimeLoad;
+            foreach (var item in dictTimeSync)
+            {
+                totalTimeSync += item.Value;
+            }
+            foreach (var item in dictTimeLoad)
+            {
+                totalTimeLoad += item.Value;
+            }
+            currentLog += $"\n TotalTimeSync in Thread = {totalTimeSync}, totalTimeLoad in Thread = {totalTimeLoad}";
             UpdateLog();
         }
         Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
-        currentLog += $"Downloaded num = {numDownloaded} {obj} Complete ";
-        UpdateLog();
     }
 }

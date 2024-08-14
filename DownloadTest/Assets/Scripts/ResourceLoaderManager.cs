@@ -29,21 +29,29 @@ public class ResourceLoaderManager : MonoBehaviour
     // In MB
     public const float VERY_FAST_THESH_HOLD = 2.0f;
     public const float FAST_THESH_HOLD = 1.0f;
-    private ConcurrentDictionary<string, object> resourceCache = new ConcurrentDictionary<string, object>();
-    private ConcurrentDictionary<string, Action<object>> pendingCallbacks = new ConcurrentDictionary<string, Action<object>>();
+    private Dictionary<string, object> resourceCache = new Dictionary<string, object>();
+    private Dictionary<string, Action<object>> pendingCallbacks = new Dictionary<string, Action<object>>();
     private PriorityQueue<ResourceRequest> requestQueue = new PriorityQueue<ResourceRequest>();
 
     public int maxThreads;
     private float downloadSpeed = 0f;
     private const int MAX_RETRIES = 3;
 
-    private IDownloader downloader;
+    private HttpClient downloader;
     private Dictionary<Type, IResourceProvider> providers;
+    public SemaphoreSlim semaphore = new SemaphoreSlim(1);
 
+    // DEBUG, BENCHMARK
+    public System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+    public Dictionary<string, float> dictURLToTimeLoad = new Dictionary<string, float>();
+    public Dictionary<string, float> dictURLToTimeWaitAsync = new Dictionary<string, float>();
+        
     private void Awake()
     {
-        maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 16);  // Cap at 16 threads
-        downloader = new HttpClientDownloader();
+        //maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 16);  // Cap at 16 threads
+        maxThreads = 4;
+        downloader = new HttpClient();
+        semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
     }
 
     private void OnDestroy()
@@ -71,10 +79,8 @@ public class ResourceLoaderManager : MonoBehaviour
         requestQueue.Enqueue(new ResourceRequest(url, typeof(T), priority));
     }
 
-    public async UniTaskVoid ProcessQueue()
+    public async UniTask ProcessQueue()
     {
-        SemaphoreSlim semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
-
         List<UniTask> downloadTasks = new List<UniTask>();
 
         while (!requestQueue.IsEmpty)
@@ -82,29 +88,30 @@ public class ResourceLoaderManager : MonoBehaviour
             ResourceRequest request = requestQueue.Dequeue();
 
             // Start the download immediately and add the task to the list
-            UniTask downloadTask = DownloadResource(request, semaphore);
+            UniTask downloadTask = DownloadResource(request);
             downloadTasks.Add(downloadTask);
         }
-
+        
         if (downloadTasks.Count > 0)
         {
+            stopwatch.Restart();
             await UniTask.WhenAll(downloadTasks); // Wait for the current batch to complete
             downloadTasks.Clear(); // Clear the list for the next batch
+            stopwatch.Stop();
+            Debug.LogError($"Resource Loader Time = {stopwatch.ElapsedMilliseconds}");
         }
 
         InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
     }
 
-
-
     public void InvokeAllCallbacks(List<string> callbackIds)
     {
         foreach (var id in callbackIds)
         {
-            if (resourceCache.ContainsKey(id))
+            if (resourceCache.TryGetValue(id, out object obj))
             {
                 long size = 0;
-                size = ((byte[])resourceCache[id]).LongLength;
+                size = ((byte[]) obj).LongLength;
                 if (pendingCallbacks.ContainsKey(id))
                 {
                     var callback = pendingCallbacks[id];
@@ -118,22 +125,33 @@ public class ResourceLoaderManager : MonoBehaviour
         }
     }
 
-    private async UniTask DownloadResource(ResourceRequest request, SemaphoreSlim semaphore)
+    private async UniTask DownloadResource(ResourceRequest request)
     {
-        await semaphore.WaitAsync(); // Wait for a slot to become available
+        var sw = new System.Diagnostics.Stopwatch();
 
+        // Measure semaphore wait time
+        sw.Start();
+        await semaphore.WaitAsync(); // Wait for a slot to become available
+        sw.Stop();
+        dictURLToTimeWaitAsync[request.Url] = sw.ElapsedMilliseconds;
+
+        // Measure download time
+        sw.Restart();
         try
         {
             for (int retry = 0; retry < MAX_RETRIES; retry++)
             {
                 try
                 {
-                    var result = await downloader.DownloadData(request.Url);
-                    if (result != null)
+                    sw.Restart(); // Restart stopwatch for each retry to measure only download time
+                    var response = await downloader.GetAsync(request.Url);
+                    if (response.IsSuccessStatusCode)
                     {
-                        resourceCache[request.Url] = result;
+                        resourceCache[request.Url] = await response.Content.ReadAsByteArrayAsync();
+                        Debug.Log($"Downloaded {request.Url}");
+                        dictURLToTimeLoad[request.Url] = sw.ElapsedMilliseconds; // Record download time
+                        return;
                     }
-                    return;
                 }
                 catch (Exception e)
                 {
@@ -149,6 +167,7 @@ public class ResourceLoaderManager : MonoBehaviour
             semaphore.Release(); // Release the semaphore slot for the next task
         }
     }
+
 
     private async UniTask<(string, object)> DownloadAndProcessResource(string url, Type type)
     {
@@ -189,7 +208,7 @@ public class ResourceLoaderManager : MonoBehaviour
 
     private void InvokeCallback(string url, object resource)
     {
-        if (pendingCallbacks.TryRemove(url, out Action<object> callback))
+        if (pendingCallbacks.TryGetValue(url, out Action<object> callback))
         {
             callback?.Invoke(resource);
         }

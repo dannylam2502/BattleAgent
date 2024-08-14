@@ -10,14 +10,9 @@ public class HttpClientDownloader : IDownloader
         httpClient = new HttpClient();
     }
 
-    public async UniTask<byte[]> DownloadData(string url)
+    public async UniTask<HttpResponseMessage> DownloadData(string url)
     {
-        var response = await httpClient.GetAsync(url);
-        if (response.IsSuccessStatusCode)
-        {
-            return await response.Content.ReadAsByteArrayAsync();
-        }
-        return null;
+        return await httpClient.GetAsync(url);
     }
 
     public void Dispose()
