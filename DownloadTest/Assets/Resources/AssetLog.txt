@@ -1,4 +1,3 @@
-https://t14k0zvfdl.execute-api.us-west-2.amazonaws.com/prod/v1/games-play
 https://base-platformer-1.s3.us-west-2.amazonaws.com/sounds/player-jump-improved.wav
 https://base-platformer-1.s3.us-west-2.amazonaws.com/sounds/collectible.mp3
 https://base-platformer-1.s3.us-west-2.amazonaws.com/sounds/player-melee-improved.wav

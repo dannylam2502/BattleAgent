@@ -33,7 +33,27 @@ public class TestResourceManager : MonoBehaviour
 
     void UpdateLog()
     {
-        uiScript.log.text = currentLog;
+        var result = $"Speed = {ResourceLoaderManager.Instance.downloadSpeed}\n";
+        result += currentLog;
+        uiScript.log.text = result;
+    }
+
+    private async void Update()
+    {
+        UpdateLog();
+        if (Input.GetKeyDown(KeyCode.T))
+        {
+            timer.Reset();
+            totalSize = 0;
+            currentLog = string.Empty;
+            ResourceLoaderManager.Instance.ReleaseAllResources();
+            ResourceLoaderManager.Instance.semaphore.Dispose();
+            ResourceLoaderManager.Instance.UpdateThreadCount();
+            ResourceLoaderManager.Instance.semaphore = new System.Threading.SemaphoreSlim(ResourceLoaderManager.Instance.maxThreads);
+            currentLog = "Downloading";
+            UpdateLog();
+            await DownloadFilesAsync(); // Start the UniTask and forget to avoid warnings
+        }
     }
 
     async UniTask DownloadFilesAsync()
@@ -90,7 +110,8 @@ public class TestResourceManager : MonoBehaviour
             {
                 totalTimeLoad += item.Value;
             }
-            currentLog += $"\n TotalTimeSync in Thread = {totalTimeSync}, totalTimeLoad in Thread = {totalTimeLoad}";
+            var totalSize = ResourceLoaderManager.Instance.GetTotalSize();
+            currentLog += $"\n TotalTimeSync in Thread = {totalTimeSync}, totalTimeLoad in Thread = {totalTimeLoad}, TotalSize = {totalSize}";
             UpdateLog();
         }
         Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");

@@ -34,22 +34,27 @@ public class ResourceLoaderManager : MonoBehaviour
     private PriorityQueue<ResourceRequest> requestQueue = new PriorityQueue<ResourceRequest>();
 
     public int maxThreads;
-    private float downloadSpeed = 0f;
+    public float downloadSpeed = 0f;
     private const int MAX_RETRIES = 3;
 
     private HttpClient downloader;
     private Dictionary<Type, IResourceProvider> providers;
     public SemaphoreSlim semaphore = new SemaphoreSlim(1);
 
+    protected LoaderState CurLoaderState { get; private set; }
+
     // DEBUG, BENCHMARK
     public System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
     public Dictionary<string, float> dictURLToTimeLoad = new Dictionary<string, float>();
     public Dictionary<string, float> dictURLToTimeWaitAsync = new Dictionary<string, float>();
+
+    public long numByteDownloaded = 0;
+    public float timeStartDownload = 0.0f;
         
     private void Awake()
     {
-        //maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 16);  // Cap at 16 threads
-        maxThreads = 4;
+        maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 16);  // Cap at 16 threads
+        //maxThreads = 4;
         downloader = new HttpClient();
         semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
     }
@@ -81,6 +86,8 @@ public class ResourceLoaderManager : MonoBehaviour
 
     public async UniTask ProcessQueue()
     {
+        timeStartDownload = Time.realtimeSinceStartup;
+        numByteDownloaded = 0;
         List<UniTask> downloadTasks = new List<UniTask>();
 
         while (!requestQueue.IsEmpty)
@@ -99,6 +106,11 @@ public class ResourceLoaderManager : MonoBehaviour
             downloadTasks.Clear(); // Clear the list for the next batch
             stopwatch.Stop();
             Debug.LogError($"Resource Loader Time = {stopwatch.ElapsedMilliseconds}");
+        }
+
+        if (CurLoaderState == LoaderState.FOCUS)
+        {
+
         }
 
         InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
@@ -147,9 +159,12 @@ public class ResourceLoaderManager : MonoBehaviour
                     var response = await downloader.GetAsync(request.Url);
                     if (response.IsSuccessStatusCode)
                     {
-                        resourceCache[request.Url] = await response.Content.ReadAsByteArrayAsync();
+                        var data = await response.Content.ReadAsByteArrayAsync();
+                        resourceCache[request.Url] = data;
                         Debug.Log($"Downloaded {request.Url}");
                         dictURLToTimeLoad[request.Url] = sw.ElapsedMilliseconds; // Record download time
+                        numByteDownloaded += data.LongLength;
+                        UpdateDownloadSpeed(numByteDownloaded);
                         return;
                     }
                 }
@@ -184,26 +199,21 @@ public class ResourceLoaderManager : MonoBehaviour
         return (null, null);
     }
 
-    private void UpdateDownloadSpeed(long bytes, float startTime)
+    public void SetLoaderState(LoaderState newState)
     {
-        float elapsedTime = Time.realtimeSinceStartup - startTime;
+        CurLoaderState = newState;
+    }
+
+    private void UpdateDownloadSpeed(long bytes)
+    {
+        float elapsedTime = Time.realtimeSinceStartup - timeStartDownload;
+        Debug.LogError($"Time = {elapsedTime}, bytes = {bytes}");
         downloadSpeed = bytes / (elapsedTime * 1024 * 1024); // MB per second
     }
 
-    private void UpdateThreadCount()
+    public void UpdateThreadCount()
     {
-        if (downloadSpeed > 2f)
-        {
-            maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 8);
-        }
-        else if (downloadSpeed > 1f)
-        {
-            maxThreads = Mathf.Max(SystemInfo.processorCount - 1, 2);
-        }
-        else
-        {
-            maxThreads = 2;
-        }
+        maxThreads = Mathf.Min(SystemInfo.processorCount * 2, Math.Max(2, Mathf.CeilToInt(downloadSpeed * 2)));
     }
 
     private void InvokeCallback(string url, object resource)
@@ -240,6 +250,17 @@ public class ResourceLoaderManager : MonoBehaviour
         return NetworkCondition.SLOW;
     }
 
+    public long GetTotalSize()
+    {
+        long total = 0;
+        foreach (var item in resourceCache)
+        {
+            byte[] data = (byte[])item.Value;
+            total += data.Length;
+        }
+        return total;
+    }
+
     public enum NetworkCondition
     {
         DEFAULT = 0,
@@ -265,6 +286,13 @@ public class ResourceLoaderManager : MonoBehaviour
         {
             return other.Priority.CompareTo(Priority); // Max-heap: higher priority comes first
         }
+    }
+
+    public enum LoaderState
+    {
+        DEFAULT = 0,
+        FOCUS, // Prioritize download, all tasks are for download. Handle things in mainthread after done
+        PARALLEL, // Process assets as long as it's finished downloading 
     }
 
     public class PriorityQueue<T> where T : IComparable<T>
