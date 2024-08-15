@@ -24,17 +24,9 @@ public class TestResourceManager : MonoBehaviour
     {
         timer.Reset();
         totalSize = 0;
-        currentLog = string.Empty;
-        ResourceLoaderManager.Instance.ReleaseAllResources();
-        ResourceLoaderManager.Instance.semaphore.Dispose();
+        ResourceLoaderManager.Instance.ResetForNextTest();
         ResourceLoaderManager.Instance.semaphore = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumConcurrent.text));
-        ResourceLoaderManager.Instance.SetLoaderState(ResourceLoaderManager.LoaderState.FocusDownloading);
-        var dictTimeLoadResource = ResourceLoaderManager.Instance.dictTypeToTimeLoad;
-        foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
-        {
-            ResourceLoaderManager.Instance.dictTypeToTimeLoad[type] = 0.0f;
-        }
-        currentLog = "Downloading";
+        currentLog = $"Current Mode: {ResourceLoaderManager.Instance.CurLoaderState}";
         UpdateLog();
         DownloadFilesAsync();
     }
@@ -49,6 +41,14 @@ public class TestResourceManager : MonoBehaviour
     private void Update()
     {
         UpdateLog();
+        if (Input.GetKeyDown(KeyCode.F))
+        {
+            ResourceLoaderManager.Instance.CurLoaderState = LoaderState.FocusDownloading;
+        }
+        if (Input.GetKeyDown(KeyCode.B))
+        {
+            ResourceLoaderManager.Instance.CurLoaderState = LoaderState.Balance;
+        }
         if (Input.GetKeyDown(KeyCode.T))
         {
             timer.Reset();
@@ -105,21 +105,31 @@ public class TestResourceManager : MonoBehaviour
         if (timer.IsRunning)
         {
             timer.Stop();
-            currentLog = $"MaxThread = {ResourceLoaderManager.Instance.semaphore.CurrentCount} Downloaded And Process in {timer.ElapsedMilliseconds} ms";
+            currentLog = $"MaxThread = {ResourceLoaderManager.Instance.semaphore.CurrentCount} Downloaded And Processed in {timer.ElapsedMilliseconds} ms";
             float totalTimeSync = 0.0f, totalTimeLoadInThread = 0.0f;
             var dictTimeSync = ResourceLoaderManager.Instance.dictURLToTimeWaitAsync;
-            var dictTimeLoad = ResourceLoaderManager.Instance.dictURLToTimeLoad;
+            var dictTimeLoad = ResourceLoaderManager.Instance.dictTypeToURLToTimeLoad;
             var dictTimeLoadResource = ResourceLoaderManager.Instance.dictTypeToTimeLoad;
+            var dictTimeDownloadInThread = new Dictionary<ResourceLoaderManager.ResourceType, float>();
             foreach (var item in dictTimeSync)
             {
                 totalTimeSync += item.Value;
             }
             foreach (var item in dictTimeLoad)
             {
-                totalTimeLoadInThread += item.Value;
+                dictTimeDownloadInThread[item.Key] = 0.0f;
+                foreach (var kvp in item.Value)
+                {
+                    totalTimeLoadInThread += kvp.Value;
+                    dictTimeDownloadInThread[item.Key] += kvp.Value;
+                }
             }
             var totalSize = ResourceLoaderManager.Instance.GetTotalSize();
             currentLog += $"\nTime Download {ResourceLoaderManager.Instance.stopWatchDownloadSpeed.ElapsedMilliseconds}";
+            foreach (var item in dictTimeDownloadInThread)
+            {
+                currentLog += $"\nTime Download In thread {item.Key} = {item.Value}";
+            }
             //currentLog += $"\n TotalTimeSync in Thread = {totalTimeSync}, totalTimeLoad in Thread = {totalTimeLoadInThread}, TotalSize = {totalSize}";
             foreach (var kvp in dictTimeLoadResource)
             {
@@ -132,13 +142,18 @@ public class TestResourceManager : MonoBehaviour
 
     public ResourceLoaderManager.ResourceType GetResourceTypeByExtension(string url)
     {
-        if (url.Contains(".webp"))
+        var extension = UrlUtils.GetExtension(url);
+        if (extension == "webp")
         {
             return ResourceLoaderManager.ResourceType.Webp;
         }
-        else if (url.Contains(".zip"))
+        else if (extension == "mp3" || extension == "wav")
         {
-
+            return ResourceLoaderManager.ResourceType.Audio;
+        }
+        else if (extension == "zip")
+        {
+            return ResourceType.Json;
         }
         return ResourceLoaderManager.ResourceType.Default;
     }
