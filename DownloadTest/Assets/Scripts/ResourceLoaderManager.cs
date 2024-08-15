@@ -70,6 +70,7 @@ public class ResourceLoaderManager : MonoBehaviour
 
     private void OnDestroy()
     {
+        downloadHandler.Dispose();
     }
 
     public async void Update()
