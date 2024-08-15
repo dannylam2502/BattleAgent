@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-public class AudioClipProvider : IResourceProvider
+public class AudioClipProvider
 {
     public async Task<object> ProcessResource(byte[] data, string url)
     {

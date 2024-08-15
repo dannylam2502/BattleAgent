@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-public class JsonProvider : IResourceProvider
+public class JsonProvider
 {
     public Task<object> ProcessResource(byte[] data, string url)
     {

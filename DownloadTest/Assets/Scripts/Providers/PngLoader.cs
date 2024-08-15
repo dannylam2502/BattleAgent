@@ -1,7 +1,7 @@
 using System.Threading.Tasks;
 using UnityEngine;
 
-public class PngProvider : IResourceProvider
+public class PngProvider
 {
     public async Task<object> ProcessResource(byte[] data, string url)
     {

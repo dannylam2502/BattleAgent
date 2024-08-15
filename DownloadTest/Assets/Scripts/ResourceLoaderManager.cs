@@ -5,9 +5,7 @@ using System.Threading.Tasks;
 using System.Net.Http;
 using Cysharp.Threading.Tasks;
 using System.Threading;
-using System.Collections.Concurrent;
 using System.Linq;
-using System.Collections;
 
 public class ResourceLoaderManager : MonoBehaviour
 {
@@ -27,26 +25,28 @@ public class ResourceLoaderManager : MonoBehaviour
     }
 
     // In MB
-    public const float VERY_FAST_THESH_HOLD = 2.0f;
-    public const float FAST_THESH_HOLD = 1.0f;
-    private Dictionary<string, object> resourceCache = new Dictionary<string, object>();
+    private Dictionary<string, DataCache> cacheData = new Dictionary<string, DataCache>();
     private Dictionary<string, Action<object>> pendingCallbacks = new Dictionary<string, Action<object>>();
     private PriorityQueue<ResourceRequest> requestQueue = new PriorityQueue<ResourceRequest>();
+    protected LoaderFactory loaderFactory = new LoaderFactory();
+    
 
     public int maxThreads;
     public float downloadSpeed = 0f;
     private const int MAX_RETRIES = 3;
 
     private HttpClient downloader;
-    private Dictionary<Type, IResourceProvider> providers;
+    private Dictionary<ResourceType, IResourceLoader> providers;
     public SemaphoreSlim semaphore = new SemaphoreSlim(1);
 
     protected LoaderState CurLoaderState { get; private set; }
 
     // DEBUG, BENCHMARK
-    public System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+    public System.Diagnostics.Stopwatch stopWatchDownloadSpeed = new System.Diagnostics.Stopwatch();
+    public System.Diagnostics.Stopwatch stopWatchProcess = new System.Diagnostics.Stopwatch();
     public Dictionary<string, float> dictURLToTimeLoad = new Dictionary<string, float>();
     public Dictionary<string, float> dictURLToTimeWaitAsync = new Dictionary<string, float>();
+    public Dictionary<ResourceType, float> dictTypeToTimeLoad = new Dictionary<ResourceType, float>();
 
     public long numByteDownloaded = 0;
     public float timeStartDownload = 0.0f;
@@ -57,15 +57,29 @@ public class ResourceLoaderManager : MonoBehaviour
         //maxThreads = 4;
         downloader = new HttpClient();
         semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
+
+        foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
+        {
+            dictTypeToTimeLoad.Add(type, 0.0f);
+        }
+        
     }
 
     private void OnDestroy()
     {
     }
 
-    public void GetResource<T>(string url, Action<object> callback, int priority = 0, object user = null) where T : UnityEngine.Object
+    public async void Update()
     {
-        if (resourceCache.TryGetValue(url, out object cachedResource))
+        if (!requestQueue.IsEmpty)
+        {
+            await ProcessQueue();
+        }
+    }
+
+    public void GetResource(ResourceType type, string url, Action<object> callback, int priority = 0, object user = null)
+    {
+        if (cacheData.TryGetValue(url, out DataCache cachedResource))
         {
             callback?.Invoke(cachedResource);
             //AddResourceUser(url, user);
@@ -81,7 +95,7 @@ public class ResourceLoaderManager : MonoBehaviour
             pendingCallbacks[url] = callback;
         }
 
-        requestQueue.Enqueue(new ResourceRequest(url, typeof(T), priority));
+        requestQueue.Enqueue(new ResourceRequest(url, type, priority));
     }
 
     public async UniTask ProcessQueue()
@@ -101,16 +115,16 @@ public class ResourceLoaderManager : MonoBehaviour
         
         if (downloadTasks.Count > 0)
         {
-            stopwatch.Restart();
+            stopWatchDownloadSpeed.Restart();
             await UniTask.WhenAll(downloadTasks); // Wait for the current batch to complete
             downloadTasks.Clear(); // Clear the list for the next batch
-            stopwatch.Stop();
-            Debug.LogError($"Resource Loader Time = {stopwatch.ElapsedMilliseconds}");
+            stopWatchDownloadSpeed.Stop();
+            Debug.LogError($"Resource Loader Download Time = {stopWatchDownloadSpeed.ElapsedMilliseconds}");
         }
 
-        if (CurLoaderState == LoaderState.FOCUS)
+        if (CurLoaderState == LoaderState.FocusDownloading)
         {
-
+            ProcessAssets(cacheData.Keys.ToList());
         }
 
         InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
@@ -120,10 +134,10 @@ public class ResourceLoaderManager : MonoBehaviour
     {
         foreach (var id in callbackIds)
         {
-            if (resourceCache.TryGetValue(id, out object obj))
+            if (cacheData.TryGetValue(id, out DataCache obj))
             {
                 long size = 0;
-                size = ((byte[]) obj).LongLength;
+                size = obj.Content.LongLength;
                 if (pendingCallbacks.ContainsKey(id))
                 {
                     var callback = pendingCallbacks[id];
@@ -160,7 +174,9 @@ public class ResourceLoaderManager : MonoBehaviour
                     if (response.IsSuccessStatusCode)
                     {
                         var data = await response.Content.ReadAsByteArrayAsync();
-                        resourceCache[request.Url] = data;
+                        DataCache assetCache = new DataCache()
+                        { Content = data, Type = request.Type, Id = request.Url};
+                        cacheData[request.Url] = assetCache;
                         Debug.Log($"Downloaded {request.Url}");
                         dictURLToTimeLoad[request.Url] = sw.ElapsedMilliseconds; // Record download time
                         numByteDownloaded += data.LongLength;
@@ -226,56 +242,82 @@ public class ResourceLoaderManager : MonoBehaviour
 
     public void ReleaseAllResources()
     {
-        foreach (var resource in resourceCache.Values)
-        {
-            if (resource is UnityEngine.Object unityObject)
-            {
-                Destroy(unityObject);
-            }
-        }
-        resourceCache.Clear();
+        cacheData.Clear();
         //resourceUsers.Clear();
-    }
-
-    public NetworkCondition GetNetworkCondition()
-    {
-        if (downloadSpeed >= VERY_FAST_THESH_HOLD)
-        {
-            return NetworkCondition.VERY_FAST;
-        }
-        else if (downloadSpeed >= FAST_THESH_HOLD)
-        {
-            return NetworkCondition.FAST;
-        }
-        return NetworkCondition.SLOW;
     }
 
     public long GetTotalSize()
     {
         long total = 0;
-        foreach (var item in resourceCache)
+        foreach (var item in cacheData)
         {
-            byte[] data = (byte[])item.Value;
+            byte[] data = item.Value.Content;
             total += data.Length;
         }
         return total;
     }
 
-    public enum NetworkCondition
+    public void ProcessAssets(List<string> assetIds)
     {
-        DEFAULT = 0,
-        VERY_FAST = 1,
-        FAST = 2,
-        SLOW = 3
+        foreach (var id in assetIds)
+        {
+            if (cacheData.ContainsKey(id))
+            {
+                ProcessAsset(cacheData[id]);
+            }
+        }
+    }
+
+    public void ProcessAsset(DataCache data)
+    {
+        stopWatchProcess.Restart();
+        UnityEngine.Object obj = null;
+        if (data != null)
+        {
+            if (data.Type == ResourceType.Webp)
+            {
+                obj = loaderFactory.LoadResource(data.Content, false, true);
+                stopWatchProcess.Stop();
+                if (obj != null)
+                {
+                    dictTypeToTimeLoad[data.Type] += stopWatchProcess.ElapsedMilliseconds;
+                }
+            }
+            if (obj != null)
+            {
+                Debug.Log($"Processed Data Type {data.Type} ID = {data.Id} time = {stopWatchProcess.ElapsedMilliseconds}ms");
+            }
+            else
+            {
+                Debug.Log($"obj is null Processed Data Type {data.Type} ID = {data.Id}");
+            }
+        }
+    }
+
+    public enum ResourceType
+    {
+        Default = 0,
+        Webp,
+        Png,
+        Audio,
+        Json,
+        Binary
+    }
+
+    public class DataCache
+    {
+        public string Id;
+        public byte[] Content { get; set; }
+        public ResourceType Type { get; set; }
     }
 
     public class ResourceRequest : IComparable<ResourceRequest>
     {
         public string Url { get; }
-        public Type Type { get; }
+        public ResourceType Type { get; }
         public int Priority { get; }
 
-        public ResourceRequest(string url, Type type, int priority)
+        public ResourceRequest(string url, ResourceType type, int priority)
         {
             Url = url;
             Type = type;
@@ -290,9 +332,9 @@ public class ResourceLoaderManager : MonoBehaviour
 
     public enum LoaderState
     {
-        DEFAULT = 0,
-        FOCUS, // Prioritize download, all tasks are for download. Handle things in mainthread after done
-        PARALLEL, // Process assets as long as it's finished downloading 
+        Default = 0,
+        FocusDownloading, // Prioritize download, all tasks are for download. Handle things in mainthread after done
+        Balance, // Process assets as long as it's finished downloading
     }
 
     public class PriorityQueue<T> where T : IComparable<T>

@@ -1,6 +1,6 @@
 using System.Threading.Tasks;
 
-public class BinaryProvider : IResourceProvider
+public class BinaryProvider
 {
     public Task<object> ProcessResource(byte[] data, string url)
     {
