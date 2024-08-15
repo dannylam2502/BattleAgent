@@ -59,7 +59,7 @@ public class ResourceLoaderManager : MonoBehaviour
         loaderFactory = new LoaderFactory();
         downloadHandler = new DownloadHandler();
         semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
-
+        CurLoaderState = LoaderState.Balance;
         foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
         {
             dictTypeToTimeLoad.Add(type, 0.0f);
@@ -82,7 +82,7 @@ public class ResourceLoaderManager : MonoBehaviour
             }
             else
             {
-
+                await ProcessQueueBalanceMode();
             }
         }
     }
@@ -134,34 +134,38 @@ public class ResourceLoaderManager : MonoBehaviour
 
         ProcessAssets(cacheData.Keys.ToList());
         InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
+
+        // DEBUG Complete
+        FindObjectOfType<TestResourceManager>().OnOperationComplete();
     }
 
     public async UniTask ProcessQueueBalanceMode()
     {
         timeStartDownload = Time.realtimeSinceStartup;
         numByteDownloaded = 0;
-        List<UniTask> downloadTasks = new List<UniTask>();
+        List<UniTask> tasks = new List<UniTask>();
 
         while (!requestQueue.IsEmpty)
         {
             ResourceRequest request = requestQueue.Dequeue();
 
             // Start the download immediately and add the task to the list
-            UniTask downloadTask = DownloadResource(request);
-            downloadTasks.Add(downloadTask);
+            UniTask downloadTask = DownloadAndProcessResource(request);
+            tasks.Add(downloadTask);
         }
 
-        if (downloadTasks.Count > 0)
+        if (tasks.Count > 0)
         {
             stopWatchDownloadSpeed.Restart();
-            await UniTask.WhenAll(downloadTasks); // Wait for the current batch to complete
-            downloadTasks.Clear(); // Clear the list for the next batch
+            await UniTask.WhenAll(tasks); // Wait for the current batch to complete
+            tasks.Clear(); // Clear the list for the next batch
             stopWatchDownloadSpeed.Stop();
             Debug.LogError($"Resource Loader Download Time = {stopWatchDownloadSpeed.ElapsedMilliseconds}");
         }
 
-        ProcessAssets(cacheData.Keys.ToList());
-        InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
+
+        // DEBUG Complete
+        FindObjectOfType<TestResourceManager>().OnOperationComplete();
     }
 
     public void InvokeAllCallbacks(List<string> callbackIds)
@@ -241,26 +245,69 @@ public class ResourceLoaderManager : MonoBehaviour
     }
 
 
-    private async UniTask<(string, object)> DownloadAndProcessResource(string url, Type type)
+    private async UniTask DownloadAndProcessResource(ResourceRequest request)
     {
-        ////var startTime = Time.realtimeSinceStartup;
-        //var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-        //response.EnsureSuccessStatusCode();
+        var sw = new System.Diagnostics.Stopwatch();
 
-        ////var contentLength = response.Content.Headers.ContentLength ?? 0;
-        //var content = await response.Content.ReadAsByteArrayAsync();
+        // Measure semaphore wait time
+        sw.Start();
+        await semaphore.WaitAsync(); // Wait for a slot to become available
+        sw.Stop();
+        dictURLToTimeWaitAsync[request.Url] = sw.ElapsedMilliseconds;
 
-        ////UpdateDownloadSpeed(content.Length, startTime);
+        // Measure download time
+        sw.Restart();
+        try
+        {
+            for (int retry = 0; retry < MAX_RETRIES; retry++)
+            {
+                try
+                {
+                    sw.Restart(); // Restart stopwatch for each retry to measure only download time
+                    //var response = await downloader.GetAsync(request.Url);
+                    if (request.Type != ResourceType.Audio)
+                    {
+                        var response = await downloadHandler.DownloadByteAsync(request.Url);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            var data = await response.Content.ReadAsByteArrayAsync();
+                            DataCache assetCache = new DataCache()
+                            { Content = data, Type = request.Type, Id = request.Url };
+                            cacheData[request.Url] = assetCache;
+                            Debug.Log($"Downloaded {request.Url}");
+                            dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
+                            numByteDownloaded += data.LongLength;
+                            UpdateDownloadSpeed(numByteDownloaded);
 
-        //return (url, content);
-        return (null, null);
+                            // Process asset async here
+                            await ProcessAssetAsync(assetCache);
+                            InvokeCallback(request.Url);
+                            return;
+                        }
+                    }
+                    else if (request.Type == ResourceType.Audio)
+                    {
+                        // For Audio, download and decode at the same time *WARNING*
+                        var data = await downloadHandler.DownloadAudioClip(request.Url);
+                        dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
+                        cacheResource[request.Url] = data;
+                        return;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"Download failed (Attempt {retry + 1}/{MAX_RETRIES}): {e.Message}");
+                    await UniTask.Delay(Mathf.FloorToInt(1000 * Mathf.Pow(2, retry)));
+                }
+            }
+
+            Debug.LogError($"Failed to download resource after {MAX_RETRIES} attempts: {request.Url}");
+        }
+        finally
+        {
+            semaphore.Release(); // Release the semaphore slot for the next task
+        }
     }
-
-    public void SetLoaderState(LoaderState newState)
-    {
-        CurLoaderState = newState;
-    }
-
     private void UpdateDownloadSpeed(long bytes)
     {
         float elapsedTime = Time.realtimeSinceStartup - timeStartDownload;
@@ -273,12 +320,16 @@ public class ResourceLoaderManager : MonoBehaviour
         maxThreads = Mathf.Min(SystemInfo.processorCount * 2, Math.Max(2, Mathf.CeilToInt(downloadSpeed * 2)));
     }
 
-    private void InvokeCallback(string url, object resource)
+    private void InvokeCallback(string url)
     {
         if (pendingCallbacks.TryGetValue(url, out Action<object> callback))
         {
-            callback?.Invoke(resource);
+            if (cacheResource.TryGetValue(url, out object obj))
+            {
+                callback?.Invoke(obj);
+            }
         }
+        pendingCallbacks.Remove(url);
     }
 
     public void ReleaseAllResources()
@@ -323,6 +374,37 @@ public class ResourceLoaderManager : MonoBehaviour
             else if (data.Type == ResourceType.Json)
             {
                 obj = loaderFactory.LoadResourceJson(data.Content);
+            }
+            if (obj != null)
+            {
+                cacheResource[data.Id] = obj;
+                stopWatchProcess.Stop();
+                if (obj != null)
+                {
+                    dictTypeToTimeLoad[data.Type] += stopWatchProcess.ElapsedMilliseconds;
+                }
+                Debug.Log($"Processed Data Type {data.Type} ID = {data.Id} time = {stopWatchProcess.ElapsedMilliseconds}ms");
+            }
+            else
+            {
+                Debug.Log($"obj is null Processed Data Type {data.Type} ID = {data.Id}");
+            }
+        }
+    }
+
+    public async UniTask ProcessAssetAsync(DataCache data)
+    {
+        stopWatchProcess.Restart();
+        object obj = null;
+        if (data != null)
+        {
+            if (data.Type == ResourceType.Webp)
+            {
+                obj = await loaderFactory.LoadResourceWebpAsync(data.Content, false, true);
+            }
+            else if (data.Type == ResourceType.Json)
+            {
+                obj = await loaderFactory.LoadResourceJsonAsync(data.Content);
             }
             if (obj != null)
             {
@@ -388,7 +470,6 @@ public class ResourceLoaderManager : MonoBehaviour
     {
         ResourceLoaderManager.Instance.ReleaseAllResources();
         ResourceLoaderManager.Instance.semaphore.Dispose();
-        ResourceLoaderManager.Instance.SetLoaderState(ResourceLoaderManager.LoaderState.FocusDownloading);
         var dictTimeLoadResource = ResourceLoaderManager.Instance.dictTypeToTimeLoad;
         foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
         {

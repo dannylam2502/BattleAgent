@@ -11,10 +11,12 @@ public class UIScript : MonoBehaviour
     public TMP_Text log;
     public TMP_Text decodeLog;
     public TMP_Text PNGLog;
+    public TMP_Text txtSwitchMode;
+
     // Start is called before the first frame update
     void Start()
     {
-        
+        txtSwitchMode.text = $"{ResourceLoaderManager.Instance.CurLoaderState}";
     }
 
     // Update is called once per frame
@@ -31,5 +33,18 @@ public class UIScript : MonoBehaviour
     public void LoadDownloadScene()
     {
         SceneManager.LoadScene(1);
+    }
+
+    public void OnClickSwitchMode()
+    {
+        if (ResourceLoaderManager.Instance.CurLoaderState == ResourceLoaderManager.LoaderState.FocusDownloading)
+        {
+            ResourceLoaderManager.Instance.CurLoaderState = ResourceLoaderManager.LoaderState.Balance;
+        }
+        else
+        {
+            ResourceLoaderManager.Instance.CurLoaderState = ResourceLoaderManager.LoaderState.FocusDownloading;
+        }
+        txtSwitchMode.text = $"{ResourceLoaderManager.Instance.CurLoaderState}";
     }
 }

@@ -33,7 +33,7 @@ public class TestResourceManager : MonoBehaviour
 
     void UpdateLog()
     {
-        var result = $"Speed = {ResourceLoaderManager.Instance.downloadSpeed}\n";
+        var result = $"Speed = {ResourceLoaderManager.Instance.downloadSpeed} Bytes = {ResourceLoaderManager.Instance.numByteDownloaded} (exclude Audio)\n";
         result += currentLog;
         uiScript.log.text = result;
     }
@@ -102,10 +102,34 @@ public class TestResourceManager : MonoBehaviour
     public void OnDownloadComplete(object obj)
     {
         numDownloaded++;
+        Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
+    }
+
+    public ResourceLoaderManager.ResourceType GetResourceTypeByExtension(string url)
+    {
+        var extension = UrlUtils.GetExtension(url);
+        if (extension == "webp")
+        {
+            return ResourceLoaderManager.ResourceType.Webp;
+        }
+        else if (extension == "mp3" || extension == "wav")
+        {
+            return ResourceLoaderManager.ResourceType.Audio;
+        }
+        else if (extension == "zip")
+        {
+            return ResourceType.Json;
+        }
+        return ResourceLoaderManager.ResourceType.Default;
+    }
+
+    public void OnOperationComplete()
+    {
         if (timer.IsRunning)
         {
             timer.Stop();
-            currentLog = $"MaxThread = {ResourceLoaderManager.Instance.semaphore.CurrentCount} Downloaded And Processed in {timer.ElapsedMilliseconds} ms";
+            currentLog = $"Current Mode: {ResourceLoaderManager.Instance.CurLoaderState}\n";
+            currentLog += $"MaxThread = {ResourceLoaderManager.Instance.semaphore.CurrentCount} Downloaded And Processed in {timer.ElapsedMilliseconds} ms";
             float totalTimeSync = 0.0f, totalTimeLoadInThread = 0.0f;
             var dictTimeSync = ResourceLoaderManager.Instance.dictURLToTimeWaitAsync;
             var dictTimeLoad = ResourceLoaderManager.Instance.dictTypeToURLToTimeLoad;
@@ -137,24 +161,5 @@ public class TestResourceManager : MonoBehaviour
             }
             UpdateLog();
         }
-        Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
-    }
-
-    public ResourceLoaderManager.ResourceType GetResourceTypeByExtension(string url)
-    {
-        var extension = UrlUtils.GetExtension(url);
-        if (extension == "webp")
-        {
-            return ResourceLoaderManager.ResourceType.Webp;
-        }
-        else if (extension == "mp3" || extension == "wav")
-        {
-            return ResourceLoaderManager.ResourceType.Audio;
-        }
-        else if (extension == "zip")
-        {
-            return ResourceType.Json;
-        }
-        return ResourceLoaderManager.ResourceType.Default;
     }
 }
