@@ -82,7 +82,11 @@ public class TestResourceManager : MonoBehaviour
         {
             // Call the ResourceLoaderManager to get resources asynchronously
             var type = GetResourceTypeByExtension(url);
-            ResourceLoaderManager.Instance.GetResource(type, url, OnDownloadComplete);
+            ResourceLoaderManager.Instance.GetResource(type, url, obj =>
+            {
+                numDownloaded++;
+                Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
+            });
         }
         timer.Restart();
     }
@@ -97,12 +101,6 @@ public class TestResourceManager : MonoBehaviour
         }
 
         return textAsset.text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-    }
-
-    public void OnDownloadComplete(object obj)
-    {
-        numDownloaded++;
-        Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
     }
 
     public ResourceLoaderManager.ResourceType GetResourceTypeByExtension(string url)

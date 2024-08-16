@@ -385,7 +385,7 @@ public class ResourceLoaderManager : MonoBehaviour
     {
         foreach (var id in assetIds)
         {
-            if (cacheData.ContainsKey(id))
+            if (cacheData[AssetGroupId].ContainsKey(id))
             {
                 ProcessAsset(cacheData[AssetGroupId][id]);
             }
