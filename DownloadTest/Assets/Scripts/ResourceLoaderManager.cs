@@ -118,16 +118,7 @@ public class ResourceLoaderManager : MonoBehaviour
             return;
         }
 
-        if (pendingCallbacks.ContainsKey(url))
-        {
-            pendingCallbacks[url] += callback;
-        }
-        else
-        {
-            pendingCallbacks[url] = callback;
-        }
-
-        requestQueue.Enqueue(new ResourceRequest(url, type, priority));
+        EnqueueRequest(type, url, callback, priority);
     }
 
     public async UniTask<object> GetResourceAsync(ResourceType type, string url, int priority = 0)
@@ -149,10 +140,24 @@ public class ResourceLoaderManager : MonoBehaviour
         }
 
         // Start the resource loading process, passing in the callback
-        GetResource(type, url, Callback, priority);
+        EnqueueRequest(type, url, Callback, priority);
 
         // Return the task, which will complete when TrySetResult is called
         return await completionSource.Task;
+    }
+
+    protected void EnqueueRequest(ResourceType type, string url, Action<object> callback, int priority = 0)
+    {
+        if (pendingCallbacks.ContainsKey(url))
+        {
+            pendingCallbacks[url] += callback;
+        }
+        else
+        {
+            pendingCallbacks[url] = callback;
+        }
+
+        requestQueue.Enqueue(new ResourceRequest(url, type, priority));
     }
 
 
