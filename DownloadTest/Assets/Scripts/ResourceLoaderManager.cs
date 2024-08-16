@@ -499,12 +499,12 @@ public class ResourceLoaderManager : MonoBehaviour
 
     public void ResetForNextTest()
     {
-        ResourceLoaderManager.Instance.ReleaseAllResources();
-        ResourceLoaderManager.Instance.semaphore.Dispose();
-        var dictTimeLoadResource = ResourceLoaderManager.Instance.dictTypeToTimeLoad;
+        ReleaseAllResources();
+        semaphore.Dispose();
+        var dictTimeLoadResource = dictTypeToTimeLoad;
         foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
         {
-            ResourceLoaderManager.Instance.dictTypeToTimeLoad[type] = 0.0f;
+            dictTypeToTimeLoad[type] = 0.0f;
         }
         SetAssetGroupId(AssetGroupId);
     }
