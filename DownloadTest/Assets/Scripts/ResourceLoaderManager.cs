@@ -151,7 +151,7 @@ public class ResourceLoaderManager : MonoBehaviour
             await UniTask.WhenAll(downloadTasks); // Wait for the current batch to complete
             downloadTasks.Clear(); // Clear the list for the next batch
             stopWatchDownloadSpeed.Stop();
-            Debug.LogError($"Resource Loader Download Time = {stopWatchDownloadSpeed.ElapsedMilliseconds}");
+            Debug.LogWarning($"Resource Loader Download Time = {stopWatchDownloadSpeed.ElapsedMilliseconds}");
         }
 
         ProcessAssets(cacheData.Keys.ToList());
@@ -333,7 +333,7 @@ public class ResourceLoaderManager : MonoBehaviour
     private void UpdateDownloadSpeed(long bytes)
     {
         float elapsedTime = Time.realtimeSinceStartup - timeStartDownload;
-        Debug.LogError($"Time = {elapsedTime}, bytes = {bytes}");
+        Debug.Log($"Time = {elapsedTime}, bytes = {bytes}");
         downloadSpeed = bytes / (elapsedTime * 1024 * 1024); // MB per second
     }
 
