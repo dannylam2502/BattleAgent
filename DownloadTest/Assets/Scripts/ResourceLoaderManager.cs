@@ -130,11 +130,38 @@ public class ResourceLoaderManager : MonoBehaviour
         requestQueue.Enqueue(new ResourceRequest(url, type, priority));
     }
 
+    public async UniTask<object> GetResourceAsync(ResourceType type, string url, int priority = 0)
+    {
+        // Check if the resource is already cached
+        if (cacheResource[AssetGroupId].TryGetValue(url, out object cachedResource))
+        {
+            return cachedResource; // If it's cached, return immediately without creating a new task
+        }
+
+        // Create a UniTaskCompletionSource to manage task completion manually
+        var completionSource = new UniTaskCompletionSource<object>();
+
+        // Define a callback to be called when the resource is loaded
+        void Callback(object resource)
+        {
+            // When the resource is ready, complete the task with the resource as the result
+            completionSource.TrySetResult(resource);
+        }
+
+        // Start the resource loading process, passing in the callback
+        GetResource(type, url, Callback, priority);
+
+        // Return the task, which will complete when TrySetResult is called
+        return await completionSource.Task;
+    }
+
+
     public async UniTask ProcessQueueFocusMode()
     {
         timeStartDownload = Time.realtimeSinceStartup;
         numByteDownloaded = 0;
         List<UniTask> downloadTasks = new List<UniTask>();
+        List<string> callbackKeys = new List<string>();
 
         while (!requestQueue.IsEmpty)
         {
@@ -143,6 +170,7 @@ public class ResourceLoaderManager : MonoBehaviour
             // Start the download immediately and add the task to the list
             UniTask downloadTask = DownloadResource(request);
             downloadTasks.Add(downloadTask);
+            callbackKeys.Add(request.Url);
         }
         
         if (downloadTasks.Count > 0)
@@ -154,8 +182,8 @@ public class ResourceLoaderManager : MonoBehaviour
             Debug.LogWarning($"Resource Loader Download Time = {stopWatchDownloadSpeed.ElapsedMilliseconds}");
         }
 
-        ProcessAssets(cacheData.Keys.ToList());
-        InvokeAllCallbacks(pendingCallbacks.Keys.ToList());
+        ProcessAssets(callbackKeys);
+        InvokeAllCallbacks(callbackKeys);
 
         // DEBUG Complete
         FindObjectOfType<TestResourceManager>().OnOperationComplete();
@@ -197,7 +225,14 @@ public class ResourceLoaderManager : MonoBehaviour
             if (pendingCallbacks.ContainsKey(id))
             {
                 var callback = pendingCallbacks[id];
-                callback?.Invoke($"{id}");
+                if (cacheResource[AssetGroupId].ContainsKey(id))
+                {
+                    callback?.Invoke(cacheResource[AssetGroupId][id]);
+                }
+                else
+                {
+                    callback?.Invoke($"Miss cache id = {id}");
+                }
             }
         }
         foreach (var id in callbackIds)

@@ -4,6 +4,8 @@ using System.Resources;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
+using UnityEngine.UIElements;
 using static ResourceLoaderManager;
 
 public class TestResourceManager : MonoBehaviour
@@ -11,6 +13,7 @@ public class TestResourceManager : MonoBehaviour
     public string filePath = "AssetLog"; // Path within Resources (exclude the .txt extension)
     public UIScript uiScript;
     public int totalSize = 0;
+    public RawImage image;
 
     public string currentLog;
 
@@ -60,12 +63,13 @@ public class TestResourceManager : MonoBehaviour
             ResourceLoaderManager.Instance.semaphore = new System.Threading.SemaphoreSlim(ResourceLoaderManager.Instance.maxThreads);
             currentLog = "Downloading";
             UpdateLog();
-            DownloadFilesAsync();
+            DownloadFiles();
         }
     }
 
-    void DownloadFilesAsync()
+    void DownloadFiles()
     {
+        timer.Restart();
         string[] urls = ReadFileLines();
 
         if (urls == null || urls.Length == 0)
@@ -88,7 +92,43 @@ public class TestResourceManager : MonoBehaviour
                 Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
             });
         }
+    }
+
+    void DownloadFilesAsync()
+    {
         timer.Restart();
+        string[] urls = ReadFileLines();
+
+        if (urls == null || urls.Length == 0)
+        {
+            Debug.LogError("Failed to load URLs from Resources.");
+            currentLog += "Failed to load URLs from Resources.\n";
+            UpdateLog();
+            return;
+        }
+
+        totalDownloads = urls.Length;
+        numDownloaded = 0;
+        foreach (string url in urls)
+        {
+            // Call the ResourceLoaderManager to get resources asynchronously
+            var type = GetResourceTypeByExtension(url);
+            GetResourceAsync(type, url).Forget();
+        }
+    }
+
+    async UniTask GetResourceAsync(ResourceType type, string url)
+    {
+        var obj = await ResourceLoaderManager.Instance.GetResourceAsync(type, url);
+        if (obj is Texture2D)
+        {
+            var texture = (Texture2D)obj;
+            if (texture != null)
+            {
+                image.texture = texture;
+            }
+        }
+        Debug.LogWarning($"Download Complete {obj}");
     }
 
     string[] ReadFileLines()
