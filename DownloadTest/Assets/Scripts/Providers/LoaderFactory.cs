@@ -7,6 +7,9 @@ using WebP;
 using static WebP.Texture2DExt;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using System.Diagnostics;
+using UnityEngine.Diagnostics;
 
 public class LoaderFactory
 {
@@ -32,35 +35,71 @@ public class LoaderFactory
     }
 
     // come with zip
-    public string LoadResourceJson(byte[] bytes)
+    public UniTask<string> LoadResourceJson(byte[] bytes)
     {
-        using var data = new MemoryStream(bytes);
-        using var zip = new ZipArchive(data);
-        foreach (ZipArchiveEntry entry in zip.Entries)
-        {
-            if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
-
-            using var str = entry.Open();
-            // str.Position = 0;
-            using var reader = new StreamReader(str, Encoding.UTF8);
-            return reader.ReadToEnd();
-        }
-        return null;
+        return UniTask.RunOnThreadPool(() => Encoding.UTF8.GetString(bytes));
     }
 
-    public async UniTask<string> LoadResourceJsonAsync(byte[] bytes)
+    public UniTask<string> LoadResourceJsonAsync(byte[] bytes)
     {
-        using var data = new MemoryStream(bytes);
-        using var zip = new ZipArchive(data);
-        foreach (ZipArchiveEntry entry in zip.Entries)
-        {
-            if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
-
-            using var str = entry.Open();
-            // str.Position = 0;
-            using var reader = new StreamReader(str, Encoding.UTF8);
-            return await reader.ReadToEndAsync();
-        }
-        return null;
+        return UniTask.RunOnThreadPool(() => Encoding.UTF8.GetString(bytes));
     }
+
+
+    // come with zip
+    public UniTask<JObject> LoadResourceJObject(byte[] bytes)
+    {
+        return UniTask.RunOnThreadPool(() =>
+        {
+            using (var data = new MemoryStream(bytes, false))
+            using (var zip = new ZipArchive(data, ZipArchiveMode.Read, false))
+            {
+                foreach (ZipArchiveEntry entry in zip.Entries)
+                {
+                    if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
+
+                    using (var str = entry.Open())
+                    {
+                        // Optimize by using a larger buffer for reading
+                        using (var reader = new StreamReader(str, Encoding.UTF8, false, 4096, false))
+                        {
+                            var json = reader.ReadToEnd();
+                            return JObject.Parse(json);
+                        }
+                    }
+                }
+            }
+
+            return null; // Return null if no JSON file was found
+        });
+    }
+
+
+    public UniTask<JObject> LoadResourceJObjectAsync(byte[] bytes)
+    {
+        return UniTask.RunOnThreadPool(() =>
+        {
+            using (var data = new MemoryStream(bytes, false))
+            using (var zip = new ZipArchive(data, ZipArchiveMode.Read, false))
+            {
+                foreach (ZipArchiveEntry entry in zip.Entries)
+                {
+                    if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
+
+                    using (var str = entry.Open())
+                    {
+                        // Optimize by using a larger buffer for reading
+                        using (var reader = new StreamReader(str, Encoding.UTF8, false, 4096, false))
+                        {
+                            var json = reader.ReadToEnd();
+                            return JObject.Parse(json);
+                        }
+                    }
+                }
+            }
+
+            return null; // Return null if no JSON file was found
+        });
+    }
+
 }

@@ -160,7 +160,6 @@ public class ResourceLoaderManager : MonoBehaviour
         requestQueue.Enqueue(new ResourceRequest(url, type, priority));
     }
 
-
     public async UniTask ProcessQueueFocusMode()
     {
         timeStartDownload = Time.realtimeSinceStartup;
@@ -446,6 +445,10 @@ public class ResourceLoaderManager : MonoBehaviour
             {
                 obj = loaderFactory.LoadResourceJson(data.Content);
             }
+            else if (data.Type == ResourceType.JObject)
+            {
+                obj = loaderFactory.LoadResourceJObject(data.Content);
+            }
             if (obj != null)
             {
                 cacheResource[AssetGroupId][data.Id] = obj;
@@ -477,6 +480,10 @@ public class ResourceLoaderManager : MonoBehaviour
             {
                 obj = await loaderFactory.LoadResourceJsonAsync(data.Content);
             }
+            else if (data.Type == ResourceType.JObject)
+            {
+                obj = await loaderFactory.LoadResourceJObjectAsync(data.Content);
+            }
             if (obj != null)
             {
                 cacheResource[AssetGroupId][data.Id] = obj;
@@ -501,7 +508,8 @@ public class ResourceLoaderManager : MonoBehaviour
         Png,
         Audio,
         Json,
-        Binary
+        Binary,
+        JObject
     }
 
     public class DataCache

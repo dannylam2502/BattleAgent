@@ -89,7 +89,7 @@ public class TestResourceManager : MonoBehaviour
             ResourceLoaderManager.Instance.GetResource(type, url, obj =>
             {
                 numDownloaded++;
-                Debug.Log($"Downloaded num = {numDownloaded} {obj} Complete ");
+                Debug.Log($"Downloaded num = {numDownloaded} {obj.GetType()} Complete ");
             });
         }
     }
@@ -128,7 +128,7 @@ public class TestResourceManager : MonoBehaviour
                 image.texture = texture;
             }
         }
-        Debug.LogWarning($"Download Complete {obj}");
+        Debug.LogWarning($"Download Complete {obj.GetType()}");
     }
 
     string[] ReadFileLines()
@@ -155,6 +155,10 @@ public class TestResourceManager : MonoBehaviour
             return ResourceLoaderManager.ResourceType.Audio;
         }
         else if (extension == "zip")
+        {
+            return ResourceType.JObject;
+        }
+        else if (extension == "json")
         {
             return ResourceType.Json;
         }
