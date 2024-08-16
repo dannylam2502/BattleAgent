@@ -1,8 +1,6 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
-using System.Net.Http;
 using Cysharp.Threading.Tasks;
 using System.Threading;
 using System.Linq;
@@ -25,12 +23,17 @@ public class ResourceLoaderManager : MonoBehaviour
     }
 
     // In MB
-    private Dictionary<string, DataCache> cacheData = new Dictionary<string, DataCache>();
-    private Dictionary<string, object> cacheResource = new Dictionary<string, object>();
+    // GroupID -> AssetID -> Data
+    private Dictionary<string, Dictionary<string, DataCache>> cacheData = new();
+    // GroupID -> AssetID -> Resource
+    private Dictionary<string, Dictionary<string, object>> cacheResource = new();
     private Dictionary<string, Action<object>> pendingCallbacks = new Dictionary<string, Action<object>>();
     private PriorityQueue<ResourceRequest> requestQueue = new PriorityQueue<ResourceRequest>();
     protected LoaderFactory loaderFactory;
     protected DownloadHandler downloadHandler;
+
+    // The Game ID, may determine which game ID/Assets to keep/unload
+    public string AssetGroupId { get; private set; }
     
 
     public int maxThreads;
@@ -54,6 +57,7 @@ public class ResourceLoaderManager : MonoBehaviour
         
     private void Awake()
     {
+        SetAssetGroupId("TestingDownload");
         maxThreads = Mathf.Min(SystemInfo.processorCount * 2, 16);  // Cap at 16 threads
         //maxThreads = 4;
         loaderFactory = new LoaderFactory();
@@ -88,9 +92,27 @@ public class ResourceLoaderManager : MonoBehaviour
         }
     }
 
+    public void SetAssetGroupId(string assetGroupID)
+    {
+        AssetGroupId = assetGroupID;
+        EnsureAssetGroupIdInCache();
+    }
+
+    public void EnsureAssetGroupIdInCache()
+    {
+        if (!cacheData.ContainsKey(AssetGroupId))
+        {
+            cacheData[AssetGroupId] = new Dictionary<string, DataCache>();
+        }
+        if (!cacheResource.ContainsKey(AssetGroupId))
+        {
+            cacheResource[AssetGroupId] = new Dictionary<string, object>();
+        }
+    }
+
     public void GetResource(ResourceType type, string url, Action<object> callback, int priority = 0, object user = null)
     {
-        if (cacheData.TryGetValue(url, out DataCache cachedResource))
+        if (cacheData[AssetGroupId].TryGetValue(url, out DataCache cachedResource))
         {
             callback?.Invoke(cachedResource);
             //AddResourceUser(url, user);
@@ -213,7 +235,7 @@ public class ResourceLoaderManager : MonoBehaviour
                             var data = await response.Content.ReadAsByteArrayAsync();
                             DataCache assetCache = new DataCache()
                             { Content = data, Type = request.Type, Id = request.Url };
-                            cacheData[request.Url] = assetCache;
+                            cacheData[AssetGroupId][request.Url] = assetCache;
                             Debug.Log($"Downloaded {request.Url}");
                             dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
                             numByteDownloaded += data.LongLength;
@@ -226,7 +248,7 @@ public class ResourceLoaderManager : MonoBehaviour
                         // For Audio, download and decode at the same time *WARNING*
                         var data = await downloadHandler.DownloadAudioClip(request.Url);
                         dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
-                        cacheResource[request.Url] = data;
+                        cacheResource[AssetGroupId][request.Url] = data;
                         return;
                     }
                 }
@@ -274,7 +296,7 @@ public class ResourceLoaderManager : MonoBehaviour
                             var data = await response.Content.ReadAsByteArrayAsync();
                             DataCache assetCache = new DataCache()
                             { Content = data, Type = request.Type, Id = request.Url };
-                            cacheData[request.Url] = assetCache;
+                            cacheData[AssetGroupId][request.Url] = assetCache;
                             Debug.Log($"Downloaded {request.Url}");
                             dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
                             numByteDownloaded += data.LongLength;
@@ -291,7 +313,7 @@ public class ResourceLoaderManager : MonoBehaviour
                         // For Audio, download and decode at the same time *WARNING*
                         var data = await downloadHandler.DownloadAudioClip(request.Url);
                         dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
-                        cacheResource[request.Url] = data;
+                        cacheResource[AssetGroupId][request.Url] = data;
                         return;
                     }
                 }
@@ -325,7 +347,7 @@ public class ResourceLoaderManager : MonoBehaviour
     {
         if (pendingCallbacks.TryGetValue(url, out Action<object> callback))
         {
-            if (cacheResource.TryGetValue(url, out object obj))
+            if (cacheResource[AssetGroupId].TryGetValue(url, out object obj))
             {
                 callback?.Invoke(obj);
             }
@@ -335,15 +357,24 @@ public class ResourceLoaderManager : MonoBehaviour
 
     public void ReleaseAllResources()
     {
+        foreach (var dict in cacheData)
+        {
+            dict.Value.Clear();
+        }
+        foreach (var dict in cacheResource)
+        {
+            dict.Value.Clear();
+        }
         cacheData.Clear();
         cacheResource.Clear();
+        Resources.UnloadUnusedAssets();
         //resourceUsers.Clear();
     }
 
     public long GetTotalSize()
     {
         long total = 0;
-        foreach (var item in cacheData)
+        foreach (var item in cacheData[AssetGroupId])
         {
             byte[] data = item.Value.Content;
             total += data.Length;
@@ -357,7 +388,7 @@ public class ResourceLoaderManager : MonoBehaviour
         {
             if (cacheData.ContainsKey(id))
             {
-                ProcessAsset(cacheData[id]);
+                ProcessAsset(cacheData[AssetGroupId][id]);
             }
         }
     }
@@ -378,7 +409,7 @@ public class ResourceLoaderManager : MonoBehaviour
             }
             if (obj != null)
             {
-                cacheResource[data.Id] = obj;
+                cacheResource[AssetGroupId][data.Id] = obj;
                 stopWatchProcess.Stop();
                 if (obj != null)
                 {
@@ -409,7 +440,7 @@ public class ResourceLoaderManager : MonoBehaviour
             }
             if (obj != null)
             {
-                cacheResource[data.Id] = obj;
+                cacheResource[AssetGroupId][data.Id] = obj;
                 stopWatchProcess.Stop();
                 if (obj != null)
                 {
@@ -476,6 +507,7 @@ public class ResourceLoaderManager : MonoBehaviour
         {
             ResourceLoaderManager.Instance.dictTypeToTimeLoad[type] = 0.0f;
         }
+        SetAssetGroupId(AssetGroupId);
     }
 
     public class PriorityQueue<T> where T : IComparable<T>
