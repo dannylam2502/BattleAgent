@@ -40,7 +40,6 @@ public class ResourceLoaderManager : MonoBehaviour
     public float downloadSpeed = 0f;
     private const int MAX_RETRIES = 3;
 
-    private Dictionary<ResourceType, IResourceLoader> providers;
     public SemaphoreSlim semaphore = new SemaphoreSlim(1);
 
     public LoaderState CurLoaderState { get; set; }
