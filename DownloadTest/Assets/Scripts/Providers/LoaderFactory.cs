@@ -25,7 +25,7 @@ public class LoaderFactory
 
     public async UniTask<Texture2D> LoadResourceWebpAsync(byte[] data, bool lMipmaps, bool lLinear, ScalingFunction scalingFunction = null, bool makeNoLongerReadable = true)
     {
-        await UniTask.SwitchToMainThread();
+        //await UniTask.SwitchToMainThread();
         var tex = WebP.Texture2DExt.CreateTexture2DFromWebP(data, lMipmaps, lLinear, out Error lError, scalingFunction, makeNoLongerReadable);
         if (lError == WebP.Error.Success)
         {
@@ -75,31 +75,29 @@ public class LoaderFactory
     }
 
 
-    public UniTask<JObject> LoadResourceJObjectAsync(byte[] bytes)
+    public async UniTask<JObject> LoadResourceJObjectAsync(byte[] bytes)
     {
-        return UniTask.RunOnThreadPool(() =>
+        await UniTask.SwitchToThreadPool();
+        using (var data = new MemoryStream(bytes, false))
+        using (var zip = new ZipArchive(data, ZipArchiveMode.Read, false))
         {
-            using (var data = new MemoryStream(bytes, false))
-            using (var zip = new ZipArchive(data, ZipArchiveMode.Read, false))
+            foreach (ZipArchiveEntry entry in zip.Entries)
             {
-                foreach (ZipArchiveEntry entry in zip.Entries)
-                {
-                    if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
+                if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
 
-                    using (var str = entry.Open())
+                using (var str = entry.Open())
+                {
+                    // Optimize by using a larger buffer for reading
+                    using (var reader = new StreamReader(str, Encoding.UTF8, false, 4096, false))
                     {
-                        // Optimize by using a larger buffer for reading
-                        using (var reader = new StreamReader(str, Encoding.UTF8, false, 4096, false))
-                        {
-                            var json = reader.ReadToEnd();
-                            return JObject.Parse(json);
-                        }
+                        var json = reader.ReadToEnd();
+                        return JObject.Parse(json);
                     }
                 }
             }
+        }
 
-            return null; // Return null if no JSON file was found
-        });
+        return null; // Return null if no JSON file was found
     }
 
 }

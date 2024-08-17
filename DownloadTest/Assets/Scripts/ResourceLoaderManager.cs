@@ -40,7 +40,8 @@ public class ResourceLoaderManager : MonoBehaviour
     public float downloadSpeed = 0f;
     private const int MAX_RETRIES = 3;
 
-    public SemaphoreSlim semaphore = new SemaphoreSlim(1);
+    public SemaphoreSlim semaphoreDownload = new SemaphoreSlim(1);
+    public SemaphoreSlim semaphoreParsing = new SemaphoreSlim(5);
 
     public LoaderState CurLoaderState { get; set; }
 
@@ -49,7 +50,21 @@ public class ResourceLoaderManager : MonoBehaviour
     public System.Diagnostics.Stopwatch stopWatchProcess = new System.Diagnostics.Stopwatch();
     public Dictionary<ResourceType, Dictionary<string, float>> dictTypeToURLToTimeLoad = new();
     public Dictionary<string, float> dictURLToTimeWaitAsync = new Dictionary<string, float>();
-    public Dictionary<ResourceType, float> dictTypeToTimeLoad = new Dictionary<ResourceType, float>();
+    public Dictionary<ResourceType, BenchmarkResource> dictTypeToTimeLoad = new Dictionary<ResourceType, BenchmarkResource>();
+
+    public class BenchmarkResource
+    {
+        public int count;
+        public float total;
+        public long byteCount;
+
+        public BenchmarkResource(int count, float total)
+        {
+            this.count = count;
+            this.total = total;
+            this.byteCount = 0;
+        }
+    }
 
     public long numByteDownloaded = 0;
     public float timeStartDownload = 0.0f;
@@ -61,11 +76,11 @@ public class ResourceLoaderManager : MonoBehaviour
         //maxThreads = 4;
         loaderFactory = new LoaderFactory();
         downloadHandler = new DownloadHandler();
-        semaphore = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
+        semaphoreDownload = new SemaphoreSlim(maxThreads); // You can set maxThreads based on your needs
         CurLoaderState = LoaderState.Balance;
         foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
         {
-            dictTypeToTimeLoad.Add(type, 0.0f);
+            dictTypeToTimeLoad.Add(type, new BenchmarkResource(0, 0.0f));
             dictTypeToURLToTimeLoad.Add(type, new Dictionary<string, float>());
         }
         
@@ -219,6 +234,7 @@ public class ResourceLoaderManager : MonoBehaviour
 
 
         // DEBUG Complete
+        await UniTask.SwitchToMainThread();
         FindObjectOfType<TestResourceManager>().OnOperationComplete();
     }
 
@@ -251,7 +267,7 @@ public class ResourceLoaderManager : MonoBehaviour
 
         // Measure semaphore wait time
         sw.Start();
-        await semaphore.WaitAsync(); // Wait for a slot to become available
+        await semaphoreDownload.WaitAsync(); // Wait for a slot to become available
         sw.Stop();
         dictURLToTimeWaitAsync[request.Url] = sw.ElapsedMilliseconds;
 
@@ -301,7 +317,7 @@ public class ResourceLoaderManager : MonoBehaviour
         }
         finally
         {
-            semaphore.Release(); // Release the semaphore slot for the next task
+            semaphoreDownload.Release(); // Release the semaphore slot for the next task
         }
     }
 
@@ -312,7 +328,7 @@ public class ResourceLoaderManager : MonoBehaviour
 
         // Measure semaphore wait time
         sw.Start();
-        await semaphore.WaitAsync(); // Wait for a slot to become available
+        await semaphoreDownload.WaitAsync(); // Wait for a slot to become available
         sw.Stop();
         dictURLToTimeWaitAsync[request.Url] = sw.ElapsedMilliseconds;
 
@@ -366,7 +382,7 @@ public class ResourceLoaderManager : MonoBehaviour
         }
         finally
         {
-            semaphore.Release(); // Release the semaphore slot for the next task
+            semaphoreDownload.Release(); // Release the semaphore slot for the next task
         }
     }
     private void UpdateDownloadSpeed(long bytes)
@@ -426,7 +442,7 @@ public class ResourceLoaderManager : MonoBehaviour
         {
             if (cacheData[AssetGroupId].ContainsKey(id))
             {
-                ProcessAsset(cacheData[AssetGroupId][id]);
+                ProcessAssetAsync(cacheData[AssetGroupId][id]).Forget();
             }
         }
     }
@@ -455,7 +471,9 @@ public class ResourceLoaderManager : MonoBehaviour
                 stopWatchProcess.Stop();
                 if (obj != null)
                 {
-                    dictTypeToTimeLoad[data.Type] += stopWatchProcess.ElapsedMilliseconds;
+                    dictTypeToTimeLoad[data.Type].total += stopWatchProcess.ElapsedMilliseconds;
+                    dictTypeToTimeLoad[data.Type].count++;
+                    dictTypeToTimeLoad[data.Type].byteCount += data.Content.LongLength;
                 }
                 Debug.Log($"Processed Data Type {data.Type} ID = {data.Id} time = {stopWatchProcess.ElapsedMilliseconds}ms");
             }
@@ -468,7 +486,8 @@ public class ResourceLoaderManager : MonoBehaviour
 
     public async UniTask ProcessAssetAsync(DataCache data)
     {
-        stopWatchProcess.Restart();
+        System.Diagnostics.Stopwatch swAsync = new();
+        swAsync.Start();
         object obj = null;
         if (data != null)
         {
@@ -482,17 +501,24 @@ public class ResourceLoaderManager : MonoBehaviour
             }
             else if (data.Type == ResourceType.JObject)
             {
+                await semaphoreParsing.WaitAsync();
+                System.Diagnostics.Stopwatch swParsing = new System.Diagnostics.Stopwatch();
+                swParsing.Start();
                 obj = await loaderFactory.LoadResourceJObjectAsync(data.Content);
+                swParsing.Stop();
+                dictTypeToTimeLoad[ResourceType.Parsing].total += swParsing.ElapsedMilliseconds;
+                dictTypeToTimeLoad[ResourceType.Parsing].count++;
+                dictTypeToTimeLoad[ResourceType.Parsing].byteCount += data.Content.LongLength;
+                semaphoreParsing.Release();
             }
             if (obj != null)
             {
                 cacheResource[AssetGroupId][data.Id] = obj;
-                stopWatchProcess.Stop();
-                if (obj != null)
-                {
-                    dictTypeToTimeLoad[data.Type] += stopWatchProcess.ElapsedMilliseconds;
-                }
-                Debug.Log($"Processed Data Type {data.Type} ID = {data.Id} time = {stopWatchProcess.ElapsedMilliseconds}ms");
+                swAsync.Stop();
+                dictTypeToTimeLoad[data.Type].total += swAsync.ElapsedMilliseconds;
+                dictTypeToTimeLoad[data.Type].count++;
+                dictTypeToTimeLoad[data.Type].byteCount += data.Content.LongLength;
+                Debug.Log($"Processed Data Type {data.Type} ID = {data.Id} time = {swAsync.ElapsedMilliseconds}ms");
             }
             else
             {
@@ -509,7 +535,8 @@ public class ResourceLoaderManager : MonoBehaviour
         Audio,
         Json,
         Binary,
-        JObject
+        JObject,
+        Parsing
     }
 
     public class DataCache
@@ -534,7 +561,7 @@ public class ResourceLoaderManager : MonoBehaviour
 
         public int CompareTo(ResourceRequest other)
         {
-            return other.Priority.CompareTo(Priority); // Max-heap: higher priority comes first
+            return other.Priority.CompareTo(Priority);
         }
     }
 
@@ -548,11 +575,13 @@ public class ResourceLoaderManager : MonoBehaviour
     public void ResetForNextTest()
     {
         ReleaseAllResources();
-        semaphore.Dispose();
+        semaphoreDownload.Dispose();
+        semaphoreParsing.Dispose();
         var dictTimeLoadResource = dictTypeToTimeLoad;
         foreach (ResourceType type in Enum.GetValues(typeof(ResourceType)))
         {
-            dictTypeToTimeLoad[type] = 0.0f;
+            dictTypeToTimeLoad[type].total = 0.0f;
+            dictTypeToTimeLoad[type].count = 0;
         }
         SetAssetGroupId(AssetGroupId);
     }

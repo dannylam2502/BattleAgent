@@ -28,7 +28,8 @@ public class TestResourceManager : MonoBehaviour
         timer.Reset();
         totalSize = 0;
         ResourceLoaderManager.Instance.ResetForNextTest();
-        ResourceLoaderManager.Instance.semaphore = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumConcurrent.text));
+        ResourceLoaderManager.Instance.semaphoreDownload = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumConcurrent.text));
+        ResourceLoaderManager.Instance.semaphoreParsing = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumLimit.text));
         currentLog = $"Current Mode: {ResourceLoaderManager.Instance.CurLoaderState}";
         UpdateLog();
         DownloadFilesAsync();
@@ -58,9 +59,9 @@ public class TestResourceManager : MonoBehaviour
             totalSize = 0;
             currentLog = string.Empty;
             ResourceLoaderManager.Instance.ReleaseAllResources();
-            ResourceLoaderManager.Instance.semaphore.Dispose();
+            ResourceLoaderManager.Instance.semaphoreDownload.Dispose();
             ResourceLoaderManager.Instance.UpdateThreadCount();
-            ResourceLoaderManager.Instance.semaphore = new System.Threading.SemaphoreSlim(ResourceLoaderManager.Instance.maxThreads);
+            ResourceLoaderManager.Instance.semaphoreDownload = new System.Threading.SemaphoreSlim(ResourceLoaderManager.Instance.maxThreads);
             currentLog = "Downloading";
             UpdateLog();
             DownloadFiles();
@@ -119,7 +120,7 @@ public class TestResourceManager : MonoBehaviour
 
     async UniTask GetResourceAsync(ResourceType type, string url)
     {
-        var obj = await ResourceLoaderManager.Instance.GetResourceAsync(type, url);
+        var obj = await ResourceLoaderManager.Instance.GetResourceAsync(type, url, type == ResourceType.JObject ? 0 : 1);
         if (obj is Texture2D)
         {
             var texture = (Texture2D)obj;
@@ -171,7 +172,7 @@ public class TestResourceManager : MonoBehaviour
         {
             timer.Stop();
             currentLog = $"Current Mode: {ResourceLoaderManager.Instance.CurLoaderState}\n";
-            currentLog += $"MaxThread = {ResourceLoaderManager.Instance.semaphore.CurrentCount} Downloaded And Processed in {timer.ElapsedMilliseconds} ms";
+            currentLog += $"MaxThread = {ResourceLoaderManager.Instance.semaphoreDownload.CurrentCount} Downloaded And Processed in {timer.ElapsedMilliseconds} ms";
             float totalTimeSync = 0.0f, totalTimeLoadInThread = 0.0f;
             var dictTimeSync = ResourceLoaderManager.Instance.dictURLToTimeWaitAsync;
             var dictTimeLoad = ResourceLoaderManager.Instance.dictTypeToURLToTimeLoad;
@@ -199,7 +200,7 @@ public class TestResourceManager : MonoBehaviour
             //currentLog += $"\n TotalTimeSync in Thread = {totalTimeSync}, totalTimeLoad in Thread = {totalTimeLoadInThread}, TotalSize = {totalSize}";
             foreach (var kvp in dictTimeLoadResource)
             {
-                currentLog += $"\nTime Load {kvp.Key} = {kvp.Value}";
+                currentLog += $"\nTime Load {kvp.Value.count} {kvp.Key} = {kvp.Value.total}, average = {kvp.Value.total / kvp.Value.count}, totalByte = {kvp.Value.byteCount}";
             }
             UpdateLog();
         }

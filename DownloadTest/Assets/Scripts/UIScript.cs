@@ -7,6 +7,7 @@ using UnityEngine.SceneManagement;
 public class UIScript : MonoBehaviour
 {
     public TMP_InputField infNumConcurrent;
+    public TMP_InputField infNumLimit;
     public TMP_Text txtTotalTime;
     public TMP_Text log;
     public TMP_Text decodeLog;
