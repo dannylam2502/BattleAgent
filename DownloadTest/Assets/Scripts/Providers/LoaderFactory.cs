@@ -100,4 +100,31 @@ public class LoaderFactory
         return null; // Return null if no JSON file was found
     }
 
+    public async UniTask<CharacterAnimationData> LoadResourceAnimDataAsync(byte[] bytes)
+    {
+        await UniTask.SwitchToThreadPool();
+        using (var data = new MemoryStream(bytes, false))
+        using (var zip = new ZipArchive(data, ZipArchiveMode.Read, false))
+        {
+            foreach (ZipArchiveEntry entry in zip.Entries)
+            {
+                if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
+
+                using (var str = entry.Open())
+                {
+                    // Optimize by using a larger buffer for reading
+                    using (var reader = new StreamReader(str, Encoding.UTF8, false, 4096, false))
+                    {
+                        var json = reader.ReadToEnd();
+                        //var result = Newtonsoft.Json.JsonConvert.DeserializeObject<CharacterAnimationData>(json);
+                        //var result = Jil.JSON.Deserialize<CharacterAnimationData>(json);
+                        var result = Utf8Json.JsonSerializer.Deserialize<CharacterAnimationData>(json);
+                        return result;
+                    }
+                }
+            }
+        }
+
+        return null; // Return null if no JSON file was found
+    }
 }

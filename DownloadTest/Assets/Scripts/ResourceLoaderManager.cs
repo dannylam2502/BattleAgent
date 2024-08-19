@@ -504,7 +504,8 @@ public class ResourceLoaderManager : MonoBehaviour
                 await semaphoreParsing.WaitAsync();
                 System.Diagnostics.Stopwatch swParsing = new System.Diagnostics.Stopwatch();
                 swParsing.Start();
-                obj = await loaderFactory.LoadResourceJObjectAsync(data.Content);
+                //obj = await loaderFactory.LoadResourceJObjectAsync(data.Content);
+                obj = await loaderFactory.LoadResourceAnimDataAsync(data.Content);
                 swParsing.Stop();
                 dictTypeToTimeLoad[ResourceType.Parsing].total += swParsing.ElapsedMilliseconds;
                 dictTypeToTimeLoad[ResourceType.Parsing].count++;
@@ -582,6 +583,7 @@ public class ResourceLoaderManager : MonoBehaviour
         {
             dictTypeToTimeLoad[type].total = 0.0f;
             dictTypeToTimeLoad[type].count = 0;
+            dictTypeToTimeLoad[type].byteCount = 0;
         }
         SetAssetGroupId(AssetGroupId);
     }
