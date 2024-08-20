@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Resources;
+using Astro.Engine;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UI;
 using UnityEngine.UIElements;
-using static ResourceLoaderManager;
+using static Astro.Engine.ResourceLoaderManager;
 
 public class TestResourceManager : MonoBehaviour
 {
@@ -27,6 +28,7 @@ public class TestResourceManager : MonoBehaviour
     {
         timer.Reset();
         totalSize = 0;
+        ResourceLoaderManager.Instance.SetAssetGroupId("Test Download");
         ResourceLoaderManager.Instance.ResetForNextTest();
         ResourceLoaderManager.Instance.semaphoreDownload = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumConcurrent.text));
         ResourceLoaderManager.Instance.semaphoreParsing = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumLimit.text));
@@ -53,46 +55,6 @@ public class TestResourceManager : MonoBehaviour
         {
             ResourceLoaderManager.Instance.CurLoaderState = LoaderState.Balance;
         }
-        if (Input.GetKeyDown(KeyCode.T))
-        {
-            timer.Reset();
-            totalSize = 0;
-            currentLog = string.Empty;
-            ResourceLoaderManager.Instance.ReleaseAllResources();
-            ResourceLoaderManager.Instance.semaphoreDownload.Dispose();
-            ResourceLoaderManager.Instance.UpdateThreadCount();
-            ResourceLoaderManager.Instance.semaphoreDownload = new System.Threading.SemaphoreSlim(ResourceLoaderManager.Instance.maxThreads);
-            currentLog = "Downloading";
-            UpdateLog();
-            DownloadFiles();
-        }
-    }
-
-    void DownloadFiles()
-    {
-        timer.Restart();
-        string[] urls = ReadFileLines();
-
-        if (urls == null || urls.Length == 0)
-        {
-            Debug.LogError("Failed to load URLs from Resources.");
-            currentLog += "Failed to load URLs from Resources.\n";
-            UpdateLog();
-            return;
-        }
-
-        totalDownloads = urls.Length;
-        numDownloaded = 0;
-        foreach (string url in urls)
-        {
-            // Call the ResourceLoaderManager to get resources asynchronously
-            var type = GetResourceTypeByExtension(url);
-            ResourceLoaderManager.Instance.GetResource(type, url, obj =>
-            {
-                numDownloaded++;
-                Debug.Log($"Downloaded num = {numDownloaded} {obj.GetType()} Complete ");
-            });
-        }
     }
 
     void DownloadFilesAsync()
@@ -113,14 +75,14 @@ public class TestResourceManager : MonoBehaviour
         foreach (string url in urls)
         {
             // Call the ResourceLoaderManager to get resources asynchronously
-            var type = GetResourceTypeByExtension(url);
+            var type = GetAssetTypeByExtension(url);
             GetResourceAsync(type, url).Forget();
         }
     }
 
-    async UniTask GetResourceAsync(ResourceType type, string url)
+    async UniTask GetResourceAsync(AssetType type, string url)
     {
-        var obj = await ResourceLoaderManager.Instance.GetResourceAsync(type, url, type == ResourceType.JObject ? 0 : 1);
+        var obj = await ResourceLoaderManager.Instance.GetResource(type, url, new TextureProviderConfig(), type == AssetType.JObject ? 0 : 1);
         if (obj is Texture2D)
         {
             var texture = (Texture2D)obj;
@@ -144,26 +106,26 @@ public class TestResourceManager : MonoBehaviour
         return textAsset.text.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
     }
 
-    public ResourceLoaderManager.ResourceType GetResourceTypeByExtension(string url)
+    public ResourceLoaderManager.AssetType GetAssetTypeByExtension(string url)
     {
         var extension = UrlUtils.GetExtension(url);
         if (extension == "webp")
         {
-            return ResourceLoaderManager.ResourceType.Webp;
+            return ResourceLoaderManager.AssetType.Texture2D;
         }
         else if (extension == "mp3" || extension == "wav")
         {
-            return ResourceLoaderManager.ResourceType.Audio;
+            return ResourceLoaderManager.AssetType.Audio;
         }
         else if (extension == "zip")
         {
-            return ResourceType.JObject;
+            return AssetType.JObject;
         }
         else if (extension == "json")
         {
-            return ResourceType.Json;
+            return AssetType.Json;
         }
-        return ResourceLoaderManager.ResourceType.Default;
+        return ResourceLoaderManager.AssetType.Default;
     }
 
     public void OnOperationComplete()
@@ -177,7 +139,7 @@ public class TestResourceManager : MonoBehaviour
             var dictTimeSync = ResourceLoaderManager.Instance.dictURLToTimeWaitAsync;
             var dictTimeLoad = ResourceLoaderManager.Instance.dictTypeToURLToTimeLoad;
             var dictTimeLoadResource = ResourceLoaderManager.Instance.dictTypeToTimeLoad;
-            var dictTimeDownloadInThread = new Dictionary<ResourceLoaderManager.ResourceType, float>();
+            var dictTimeDownloadInThread = new Dictionary<ResourceLoaderManager.AssetType, float>();
             foreach (var item in dictTimeSync)
             {
                 totalTimeSync += item.Value;
