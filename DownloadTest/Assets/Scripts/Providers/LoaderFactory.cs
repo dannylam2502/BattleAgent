@@ -7,94 +7,66 @@ using System.Text;
 using Cysharp.Threading.Tasks;
 using Newtonsoft.Json.Linq;
 using System.Data;
-using Unity.Collections.LowLevel.Unsafe;
-using Unity.Collections;
 
 namespace Astro.Engine
 {
 
     public class LoaderFactory
     {
-        //public async UniTask<Texture2D> LoadAssetWebpAsync(byte[] data, TextureProviderConfig config, bool lMipmaps, bool lLinear, ScalingFunction scalingFunction = null, bool makeNoLongerReadable = true, bool isZipped = false)
-        //{
-        //    await UniTask.SwitchToMainThread();
-        //    var tex = WebP.Texture2DExt.CreateTexture2DFromWebP(data, lMipmaps, lLinear, out Error lError, scalingFunction, makeNoLongerReadable);
-        //    if (lError == WebP.Error.Success)
-        //    {
-        //        return tex;
-        //    }
-        //    return null;
-        //}
-
+        public float timeCompress = 0.0f;
         public async UniTask<Texture2D> LoadAssetWebpAsync(byte[] data, TextureProviderConfig config, bool lMipmaps, bool lLinear, ScalingFunction scalingFunction = null, bool makeNoLongerReadable = true, bool isZipped = false)
         {
-            await UniTask.SwitchToMainThread();
-
-            // Get WebP dimensions
-            Error lError = Error.DecodingError;
+            Error lError;
             Texture2DExt.GetWebPDimensions(data, out var lWidth, out var lHeight);
-
-            // Preallocate buffer for RGBA data
-            byte[] lRawDataBuffer = new byte[lWidth * lHeight * 4];
-            var lRawData = Texture2DExt.LoadRGBAFromWebP(data, ref lWidth, ref lHeight, false, out lError, scalingFunction);
-
+            var lRawData = Texture2DExt.LoadRGBAFromWebP(data, ref lWidth, ref lHeight, false, out lError, null);
+            Texture2D loadedTex = null;
             if (lError == WebP.Error.Success)
             {
-                // Determine the texture format based on whether alpha is needed
-                TextureFormat format = config.DownloadWithAlpha ? TextureFormat.RGBA32 : TextureFormat.RGB24;
-                Texture2D loadedTex = new Texture2D(lWidth, lHeight, format, lMipmaps, lLinear);
-
-                // Load the raw texture data
-                loadedTex.LoadRawTextureData(lRawData);
-                loadedTex.Apply(lMipmaps, !config.IsOptimized);
-
+                await UniTask.SwitchToMainThread();
                 if (!config.DownloadWithAlpha)
                 {
-                    // If alpha is not needed, remove the alpha channel using optimized pixel data manipulation
-                    var texToDestroy = loadedTex;
-                    var tmpTex = new Texture2D(lWidth, lHeight, TextureFormat.RGB24, false, true);
-
-                    // Create a NativeArray from the pointer
-                    unsafe
-                    {
-                        Color32* pixelsPtr = (Color32*)loadedTex.GetRawTextureData<Color32>().GetUnsafeReadOnlyPtr();
-                        var pixelCount = lWidth * lHeight;
-                        var pixelsArray = NativeArrayUnsafeUtility.ConvertExistingDataToNativeArray<Color32>(pixelsPtr, pixelCount, Allocator.None);
-
-                        // Set the pixel data using the NativeArray
-                        tmpTex.SetPixelData(pixelsArray, 0);
-                    }
-
-                    // Destroy the old texture to free up memory
-                    UnityEngine.Object.Destroy(texToDestroy);
-                    loadedTex = tmpTex;
+                    loadedTex = new Texture2D(lWidth, lHeight, TextureFormat.RGB24, lMipmaps, lLinear);
                 }
+                else
+                {
+                    loadedTex = Texture2DExt.CreateWebpTexture2D(lWidth, lHeight, lMipmaps, lLinear);
 
-                // Invoke any custom processing function
+                }
+                loadedTex.LoadRawTextureData(lRawData);
                 config.OnProcessTexture?.Invoke(loadedTex);
-
-                // Optimize the texture if needed
                 if (config.IsOptimized)
                 {
+                    System.Diagnostics.Stopwatch sw = new();
+                    sw.Start();
                     OptimizeTexture(loadedTex);
+                    sw.Stop();
+                    timeCompress += sw.ElapsedMilliseconds;
                 }
-
+                else
+                {
+                    loadedTex.Apply(false, false);
+                }
                 return loadedTex;
             }
-
-            return null; // Return null if WebP decoding fails
+            return null;
         }
 
-        private static void OptimizeTexture(Texture2D texture)
+        // come with zip
+        public string LoadAssetJson(byte[] bytes, bool isZipped = false)
         {
-            if (texture.width % 4 == 0 && texture.height % 4 == 0)
+            using var data = new MemoryStream(bytes);
+            using var zip = new ZipArchive(data);
+            foreach (ZipArchiveEntry entry in zip.Entries)
             {
-                texture.Compress(false);
+                if (UrlUtils.GetExtension(entry.FullName) != "json") continue;
+
+                using var str = entry.Open();
+                // str.Position = 0;
+                using var reader = new StreamReader(str, Encoding.UTF8);
+                return reader.ReadToEnd();
             }
-
-            texture.Apply(false, true); // Apply changes and make the texture non-readable
+            return null;
         }
-
 
         public async UniTask<string> LoadAssetJsonAsync(byte[] bytes, AssetProviderConfig config, bool isZipped = false)
         {
@@ -210,6 +182,15 @@ namespace Astro.Engine
             }
 
             return null; // Return null if no JSON file was found
+        }
+        private static void OptimizeTexture(Texture2D texture)
+        {
+            if (texture.width % 4 == 0 && texture.height % 4 == 0)
+            {
+                texture.Compress(false);
+            }
+
+            texture.Apply(false, true);
         }
     }
 }

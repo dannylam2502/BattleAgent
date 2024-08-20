@@ -29,6 +29,7 @@ public class TestResourceManager : MonoBehaviour
         timer.Reset();
         totalSize = 0;
         ResourceLoaderManager.Instance.SetAssetGroupId("Test Download");
+        ResourceLoaderManager.Instance.loaderFactory.timeCompress = 0.0f;
         ResourceLoaderManager.Instance.ResetForNextTest();
         ResourceLoaderManager.Instance.semaphoreDownload = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumConcurrent.text));
         ResourceLoaderManager.Instance.semaphoreParsing = new System.Threading.SemaphoreSlim(int.Parse(uiScript.infNumLimit.text));
@@ -135,6 +136,7 @@ public class TestResourceManager : MonoBehaviour
             timer.Stop();
             currentLog = $"Current Mode: {ResourceLoaderManager.Instance.CurLoaderState}\n";
             currentLog += $"MaxThread = {ResourceLoaderManager.Instance.semaphoreDownload.CurrentCount} Downloaded And Processed in {timer.ElapsedMilliseconds} ms";
+            currentLog += $"Time Compress Texture = {ResourceLoaderManager.Instance.loaderFactory.timeCompress}";
             float totalTimeSync = 0.0f, totalTimeLoadInThread = 0.0f;
             var dictTimeSync = ResourceLoaderManager.Instance.dictURLToTimeWaitAsync;
             var dictTimeLoad = ResourceLoaderManager.Instance.dictTypeToURLToTimeLoad;

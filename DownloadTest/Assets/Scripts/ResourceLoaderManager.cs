@@ -34,7 +34,7 @@ namespace Astro.Engine
         private Dictionary<string, Dictionary<string, object>> cacheAsset = new();
         private Dictionary<string, Action<object>> pendingCallbacks = new Dictionary<string, Action<object>>();
         private PriorityQueue<ResourceRequest> requestQueue = new PriorityQueue<ResourceRequest>();
-        protected LoaderFactory loaderFactory;
+        public LoaderFactory loaderFactory;
         protected DownloadHandler downloadHandler;
 
         // The Game ID, may determine which game ID/Assets to keep/unload
@@ -244,7 +244,7 @@ namespace Astro.Engine
                                 var data = await response.Content.ReadAsByteArrayAsync();
                                 DataCache assetCache = new DataCache()
                                 { Content = data, Type = request.Type, Id = request.Url };
-                                cacheData[AssetGroupId][request.Url] = assetCache;
+                                //cacheData[AssetGroupId][request.Url] = assetCache;
                                 Debug.Log($"Downloaded {request.Url}");
                                 dictTypeToURLToTimeLoad[request.Type][request.Url] = sw.ElapsedMilliseconds; // Record download time
                                 numByteDownloaded += data.LongLength;
