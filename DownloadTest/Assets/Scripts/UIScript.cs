@@ -39,14 +39,7 @@ public class UIScript : MonoBehaviour
 
     public void OnClickSwitchMode()
     {
-        if (ResourceLoaderManager.Instance.CurLoaderState == ResourceLoaderManager.LoaderState.FocusDownloading)
-        {
-            ResourceLoaderManager.Instance.CurLoaderState = ResourceLoaderManager.LoaderState.Balance;
-        }
-        else
-        {
-            ResourceLoaderManager.Instance.CurLoaderState = ResourceLoaderManager.LoaderState.FocusDownloading;
-        }
+        ResourceLoaderManager.Instance.CurLoaderState = ResourceLoaderManager.LoaderState.Balance;
         txtSwitchMode.text = $"{ResourceLoaderManager.Instance.CurLoaderState}";
     }
 }

@@ -5,11 +5,6 @@ using UnityEngine;
 
 public class AssetProviderConfig
 {
-
-}
-
-public class TextureProviderConfig : AssetProviderConfig
-{
     // True by default
     public bool IsOptimized = true;
 
@@ -17,4 +12,9 @@ public class TextureProviderConfig : AssetProviderConfig
     public Action<Texture2D> OnProcessTexture;
 
     public bool DownloadWithAlpha = true;
+
+    public int HorizontalImages;
+    public int VerticalImages;
+    public int HorizontalOffset;
+    public int VerticalOffset;
 }

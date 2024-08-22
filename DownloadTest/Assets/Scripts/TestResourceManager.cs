@@ -48,10 +48,6 @@ public class TestResourceManager : MonoBehaviour
     private void Update()
     {
         UpdateLog();
-        if (Input.GetKeyDown(KeyCode.F))
-        {
-            ResourceLoaderManager.Instance.CurLoaderState = LoaderState.FocusDownloading;
-        }
         if (Input.GetKeyDown(KeyCode.B))
         {
             ResourceLoaderManager.Instance.CurLoaderState = LoaderState.Balance;
@@ -83,7 +79,8 @@ public class TestResourceManager : MonoBehaviour
 
     async UniTask GetResourceAsync(AssetType type, string url)
     {
-        var obj = await ResourceLoaderManager.Instance.GetResource(type, url, new TextureProviderConfig(), type == AssetType.JObject ? 0 : 1);
+        var obj = await ResourceLoaderManager.Instance.GetResourceAsync<object>(type, url, null,
+            new AssetProviderConfig() { IsOptimized = false, DownloadWithAlpha = true }, type == AssetType.JObject ? 0 : 1);
         if (obj is Texture2D)
         {
             var texture = (Texture2D)obj;
@@ -155,7 +152,6 @@ public class TestResourceManager : MonoBehaviour
                     dictTimeDownloadInThread[item.Key] += kvp.Value;
                 }
             }
-            var totalSize = ResourceLoaderManager.Instance.GetTotalSize();
             currentLog += $"\nTime Download {ResourceLoaderManager.Instance.stopWatchDownloadSpeed.ElapsedMilliseconds}";
             foreach (var item in dictTimeDownloadInThread)
             {
